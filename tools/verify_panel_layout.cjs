@@ -143,6 +143,10 @@ async function run(size, browser) {
     sc.openPlayerInfo(0); await wait(120); out.playerInfo = !!sc.customPanel
     sc.closeCustomPanel(); await wait(80)
     if (sc.state.players.length > 1) {
+      // 先手是随机的（createGame 随机 current）：先把行动者固定为 0 号，
+      // 保证 players[1] 是「他人」——否则 isMe=true 时交易按钮按设计不渲染，检测随机翻车
+      sc.state.current = 0
+      sc.refresh(); await wait(80)
       sc.openPlayerInfo(1); await wait(120)
       out.playerInfoOther = !!sc.customPanel
       out.tradeEntryInInfo = out.playerInfoOther && sc.customPanel.root.list.some((it) =>

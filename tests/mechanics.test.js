@@ -356,6 +356,7 @@ console.log('\n=== 见闻色预览下一格（PRD §4.2） ===')
 {
   const g = mkGame(2)
   setTurn(g, 0)
+  g.phase = 'awaitAction'
   g.players[0].position = 0
   g.players[0].hand.push({ uid: 'obs1', kind: 'haki', defId: 'observation' })
   const r = useHaki(g, 'obs1', 'preview')
@@ -368,6 +369,7 @@ console.log('\n=== 见闻色预览下一格（PRD §4.2） ===')
   // 缺省 action 仍是「留给负面事件取消」，不消耗卡
   const g2 = mkGame(2)
   setTurn(g2, 0)
+  g2.phase = 'awaitAction'
   g2.players[0].hand.push({ uid: 'obs2', kind: 'haki', defId: 'observation' })
   const r2 = useHaki(g2, 'obs2')
   assert(!!r2.error && g2.players[0].hand.length === 1, '缺省 action 不消耗卡（保留给取消负面事件）')
@@ -388,6 +390,7 @@ console.log('\n=== 事件统计（PRD §9 结算界面） ===')
   // 用果实 → cardsUsed 累加
   const g2 = mkGame(2)
   setTurn(g2, 0)
+  g2.phase = 'awaitAction'
   g2.players[0].hand.push({ uid: 'q1', kind: 'fruit', defId: 'quake' })
   useFruit(g2, 'q1')
   assert(g2.players[0].stats && g2.players[0].stats.cardsUsed === 1, '用果实后 stats.cardsUsed 累加')
@@ -407,7 +410,7 @@ console.log('\n=== 广播脱敏：对手果实/霸气不可见 ===')
   assert(other.hand.length === 2, '对手手牌数量不变（历史正文 + 1 张暗牌）')
   assert(other.hand.some((c) => c.kind === 'history' && c.historyId === 1), '历史正文保持公开（交易需要 historyId）')
   assert(other.hand.every((c) => c.kind !== 'fruit' && c.kind !== 'haki'), '对手的果实/霸气被隐藏（不泄露 kind）')
-  assert(other.hand.every((c) => !c.defId || c.defId === 'hidden'), '对手暗牌不泄露 defId')
+  assert(other.hand.filter((c) => c.kind === 'hidden').every((c) => c.defId === 'hidden'), '对手暗牌不泄露真实 defId')
   assert(m.players[0] === g.players[0], '自己的手牌保持全量')
   // 原始 state 不被污染（服务端 AI 与结算依赖真实手牌）
   assert(g.players[1].hand.some((c) => c.defId === 'ice'), '原始 state 未被修改')

@@ -188,13 +188,64 @@ async function finishTurn(sock, mySeat, budget = 12000) {
   ok(A.__state && A.__state.turn === g4.state.turn, '§8.2', `对局没有被重置（回合数仍为 ${A.__state && A.__state.turn}，开局时应为 ${beforeTurn}）`)
 
   // ---------------- 6. 手牌信息可见性 ----------------
-  console.log('\n=== 6. 手牌信息可见性（观察项）===')
-  const handsVisible = !!(g4.state && g4.state.players.some((p) => Array.isArray(p.hand)))
-  if (handsVisible) {
-    note('§8.2', 'game:state 全量广播 room.state：对手手牌（果实/霸气/历史正文 uid）对其他客户端可见。'
-      + 'PRD 未禁止（历史正文可交易、发起交易需指定 historyId），但果实/霸气属于隐藏信息，建议按座位裁剪。')
-  } else {
-    ok(true, '§8.2', '对手手牌已按座位裁剪')
+  console.log('\n=== 6. 手牌信息可见性（PRD §8.2 信息隔离）===')
+  {
+    const g6 = await bootGame([A, B], 2)
+    ok(g6.ok && !!g6.state, '§8.2', '对局已建立')
+    // 双方开托管让 AI 对打，采样两端实际收到的广播：对手手牌里绝不能出现明文果实/霸气
+    await emit(A, 'game:autoplay', { on: true })
+    await emit(B, 'game:autoplay', { on: true })
+    const samples = [0, 0]
+    let leaked = null
+    const collectors = [A, B].map((sock, me) => {
+      const h = (st) => {
+        if (!st || !Array.isArray(st.players)) return
+        const other = st.players[me === 0 ? 1 : 0]
+        if (!other || !Array.isArray(other.hand)) return
+        if (other.hand.length === 0) return
+        samples[me]++
+        const bad = other.hand.find((c) => c.kind === 'fruit' || c.kind === 'haki')
+        if (bad && !leaked) leaked = { me, kind: bad.kind, defId: bad.defId }
+      }
+      sock.on('game:state', h)
+      return h
+    })
+    await sleep(12000) // AI 对打采样 12 秒
+    collectors.forEach((h, i) => [A, B][i].off('game:state', h))
+    const total = samples[0] + samples[1]
+    if (leaked) {
+      ok(false, '§8.2', `对手手牌泄露明文卡（kind=${leaked.kind}, defId=${leaked.defId}）——座位脱敏未生效`)
+    } else {
+      ok(true, '§8.2', `对手果实/霸气未泄露（双方共采样到对手非空手牌快照 ${total} 次，历史正文保持公开）`)
+    }
+    if (total === 0) {
+      note('§8.2', '采样期内对手手牌一直为空（AI 未拿到卡），泄露检测退化为平凡通过——引擎层脱敏已由单元测试覆盖')
+    }
+    await emit(A, 'game:autoplay', { on: false })
+    await emit(B, 'game:autoplay', { on: false })
+  }
+
+  // ---------------- 6.5 选角倒计时与再来一局守卫 ----------------
+  console.log('\n=== 6.5 选角倒计时 / 再来一局守卫（PRD §8.4 / §7）===')
+  {
+    const S = await connect('S')
+    await emit(S, 'room:create', { maxPlayers: 2 })
+    const v1 = await emit(S, 'room:view', {})
+    const dl = v1.room && v1.room.selectDeadline
+    ok(typeof dl === 'number' && dl > Date.now(), '§8.4',
+      `进入选角即启动服务器倒计时（selectDeadline 在 ${dl ? Math.round((dl - Date.now()) / 1000) : '?'}s 后）`)
+    const waitMs = dl - Date.now() + 800
+    if (typeof dl === 'number' && waitMs < 15000) {
+      await sleep(waitMs)
+      const v2 = await emit(S, 'room:view', {})
+      const me = v2.room && v2.room.players.find((p) => p.isYou)
+      ok(me && me.charId != null, '§8.4', `倒计时归零后由服务器自动分配角色（charId=${me && me.charId}）`)
+    } else {
+      note('§8.4', `选角超时为 ${Math.round(waitMs / 1000)}s（服务器配置），跳过等待实测——本地用 OP_SELECT_TIMEOUT_MS 调短后可实测`)
+    }
+    const early = await emit(S, 'game:restart', {})
+    ok(!early.ok, '§7', `对局未结束时 game:restart 被拒（实际 ${early.ok ? '成功' : '拒绝：' + early.error}）`)
+    S.close()
   }
 
   // ---------------- 7. 回合循环与断线托管 ----------------
