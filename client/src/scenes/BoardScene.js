@@ -387,9 +387,11 @@ export default class BoardScene extends Phaser.Scene {
     this.add.image(cx, cy, 'board_frame').setDisplaySize(F, F)
     const inner = F * 0.33 // 画框内羊皮纸安全半宽
 
-    // 羊皮纸安全矩形：宽 1.86*inner，上下各留 0.94*inner
+    // 羊皮纸安全矩形：宽 1.86*inner，上下各留 0.94*inner。
+    // 高度取 1.94（略大于内容预算的贴边值）：岛屿速查行底边原距下缘仅 ~1px，
+    // 字体渲染/取整的微小抖动就会让回归断言偶发越界
     const W = inner * 1.86
-    const H = inner * 1.88
+    const H = inner * 1.94
     const left = cx - W / 2
     const top = cy - H / 2
     this.centerRect = { x: left, y: top, w: W, h: H }
@@ -428,8 +430,8 @@ export default class BoardScene extends Phaser.Scene {
     let chipH = clamp(Math.round(ds * 0.62) + 2, 16, 30)
     // 岛屿行高度：与 buildActionArea 里第三行按钮同式（btnH*0.62 收敛到 20-26）
     const islH = clamp(Math.round(btnH * 0.62), 20, 26)
-    // 身份块高度上限：给横幅、两行按钮与岛屿行留够位置后剩下的部分（-4 是上下呼吸）
-    const idBudget = H - (this.centerConsole ? gap + bannerH + gap + btnH * 2 + gap + islH : 0) - 4
+    // 身份块高度上限：给横幅、两行按钮与岛屿行（含 4 处间距）留够位置后剩下的部分（-4 是上下呼吸）
+    const idBudget = H - (this.centerConsole ? gap + bannerH + gap + btnH * 2 + gap + gap + islH : 0) - 4
     let groupH = 0
     for (;;) {
       groupH = nameH + 2 + skillH + 3 + dieH + 2 + chipH + 6
@@ -442,19 +444,23 @@ export default class BoardScene extends Phaser.Scene {
     const numFs = clamp(Math.round(chipH * 0.8), 12, 26)
     const idH = Math.max(blockW, groupH)
     // 岛屿行加入后，中等窗口（1080×610 / 1280×720）内容块会越出羊皮纸：
-    // 按 岛屿行高 → 主/次行高差 → 横幅高 逐级回收（-4 与 idBudget 同一呼吸量），
+    // 按 岛屿行高 → 主/次行高差 → 横幅高 → 按钮行高 逐级回收（-4 与 idBudget 同一呼吸量），
     // 挤压后的值经 opts 传给 buildActionArea，预算与实际绘制不会漂移
     let islHx = islH
     let dHx = clamp(Math.round(btnH * 0.18), 3, 6)
     let bannerHx = bannerH
+    let btnHx = btnH
     if (this.centerConsole) {
-      let over = idH + gap + bannerHx + gap + btnH * 2 + gap + islHx - (H - 4)
+      // 间距共 4 处：身份块→横幅、横幅→主行、主行↔次行（并入 btnHx*2+gap）、次行→岛屿行；
+      // 目标再扣 8px 安全余量，吸收各处 Math.round 的舍入误差
+      let over = idH + gap + bannerHx + gap + btnHx * 2 + gap + gap + islHx - (H - 8)
       if (over > 0) { const cut = Math.min(over, islHx - 20); islHx -= cut; over -= cut }
       if (over > 0) { const cut = Math.min(over, dHx); dHx -= cut; over -= cut }
       if (over > 0) { const cut = Math.min(over, bannerHx - 28); bannerHx -= cut; over -= cut }
+      if (over > 0) { const cut = Math.min(over, btnHx - 24); btnHx -= cut; over -= cut }
     }
     const blockH = this.centerConsole
-      ? idH + gap + bannerHx + gap + (btnH * 2 + gap) + islHx
+      ? idH + gap + bannerHx + gap + (btnHx * 2 + gap) + gap + islHx
       : idH
     const startY = top + Math.max(0, (H - blockH) / 2)
     const avX = left + pad + ringOuter
@@ -514,11 +520,13 @@ export default class BoardScene extends Phaser.Scene {
     // ---- 操作区（中央够大时搬进来）----
     if (this.centerConsole) {
       y = this.buildActionArea(left, y, W, {
-        bannerH,
+        bannerH: bannerHx,
         bannerFont: clamp(Math.round(inner * 0.09), 11, 15),
         gap,
-        btnH,
-        btnFont: clamp(Math.round(inner * 0.1), 11, 16)
+        btnH: btnHx,
+        btnFont: clamp(Math.round(inner * 0.1), 11, 16),
+        islH: islHx,
+        dH: dHx
       })
     }
     // 回合数只在右栏顶部显示一次（中央重复写「第 N 回合」属于同屏重复信息）
@@ -548,7 +556,8 @@ export default class BoardScene extends Phaser.Scene {
     // 或特定条件（技能次数/集齐历史正文）才可点，缩矮为次行。增减相抵总高不变，
     // 占位预算（idBudget / blockH 的 btnH*2）不受影响。
     const bw = (w - gap) / 2
-    const dH = clamp(Math.round(o.btnH * 0.18), 3, 6)
+    // 行高差与岛屿行高：中央路径由预算挤压后传入（opts.dH/opts.islH），回落路径用默认式
+    const dH = o.dH ?? clamp(Math.round(o.btnH * 0.18), 3, 6)
     const h1 = o.btnH + dH
     const h2 = o.btnH - dH
     const mk = (col, rowY, rowH, label, color, cb) => makeButton(this, {
@@ -563,8 +572,8 @@ export default class BoardScene extends Phaser.Scene {
     this.btnSkill = mk(0, y2, h2, '技能', PALETTE.purple, () => this.handleSkill())
     this.btnVoyage = mk(1, y2, h2, '出航', PALETTE.danger, () => this.handleVoyage())
     // 岛屿速查（我的资产/租金）：局内高频查看，作为第三行常驻全宽矮条，
-    // 与会切换的操作按钮拉开层次（信息入口 ≠ 回合操作）。高度与中央预算同式。
-    const islH = clamp(Math.round(o.btnH * 0.62), 20, 26)
+    // 与会切换的操作按钮拉开层次（信息入口 ≠ 回合操作）。
+    const islH = o.islH ?? clamp(Math.round(o.btnH * 0.62), 20, 26)
     const yIsl = y2 + h2 + gap
     this.btnIslands = makeButton(this, {
       x: x + w / 2, y: yIsl + islH / 2, w, h: islH, label: '岛屿', color: 0x2e6da4,

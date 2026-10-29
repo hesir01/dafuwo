@@ -46,7 +46,16 @@ deploy() {
   echo "    新版 build: $(curl -s -m 5 "$BASE_URL/api/version")"
   [ "${1:-}" = "--no-verify" ] && { echo "==> 完成（跳过验收）"; return 0; }
   echo "==> [5/5] 线上验收（acceptance_online）"
-  OP_URL="$BASE_URL" node "$PROJ/tools/acceptance_online.cjs" | tail -3
+  local res
+  res=$(OP_URL="$BASE_URL" node "$PROJ/tools/acceptance_online.cjs" 2>&1 | tail -3)
+  if echo "$res" | grep -qE "[1-9][0-9]* 失败"; then
+    # 新进程冷启动偶发时序抖动（如断线接管计时），3 秒后重试一次再定论
+    echo "    验收存在失败，3 秒后重试一次"
+    sleep 3
+    res=$(OP_URL="$BASE_URL" node "$PROJ/tools/acceptance_online.cjs" 2>&1 | tail -3)
+  fi
+  echo "$res"
+  echo "$res" | grep -qE "0 失败" || { echo "验收未通过！回滚：tools/deploy.sh rollback"; exit 1; }
 }
 
 rollback() {
