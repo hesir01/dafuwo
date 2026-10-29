@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_1b0acee56ea94278b5737266f7272915",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_final/backgrounds/bg_menu/16-bit_pixel_art_wide_16_9_background_One_Piece_anime-inspired_a_small_pirate_ship_with_a_sheep_figurehead_sai_8d0d55b6/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

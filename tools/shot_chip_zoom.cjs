@@ -1,0 +1,23 @@
+// 局部放大：日志底部「新消息」浮标
+const { chromium } = require('playwright-core')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+;(async () => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
+  const page = await browser.newPage({ viewport: { width: 1080, height: 610 }, deviceScaleFactor: 2 })
+  await page.goto('http://localhost:5173/index.html', { waitUntil: 'networkidle' })
+  await sleep(1600)
+  await page.evaluate(() => window.__game.scene.start('BoardScene', { autoPlay: false }))
+  await sleep(1800)
+  await page.evaluate(async () => {
+    const sc = window.__game.scene.getScene('BoardScene')
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+    for (let i = 0; i < 26; i++) sc.state.log.push({ text: `第 ${i} 回合：索隆 掷出 3+4=7，停在自己的「空岛」。`, turn: 1 })
+    sc.refresh(); await wait(150)
+    for (let i = 0; i < 8; i++) sc.scrollLog(-1)
+    for (let i = 0; i < 3; i++) sc.state.log.push({ text: `新消息 ${i}：娜美 缴纳天上金 200 贝利。`, turn: 1 })
+    sc.refresh(); await wait(200)
+  })
+  await page.screenshot({ path: '/tmp/chip_zoom.png', clip: { x: 740, y: 430, width: 340, height: 180 } })
+  await browser.close()
+  console.log('ok')
+})().catch((e) => { console.error(e); process.exit(1) })

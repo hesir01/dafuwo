@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_b66b0ff12ce846fda8713c564a6a5cb9",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_tokens/char_02_swordsman/16-bit_pixel_art_circular_board-game_token_head-only_close-up_chibi_face_medallion_of_the_green-haired_swordsm_7bbe1fab/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

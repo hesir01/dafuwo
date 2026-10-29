@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_2de31d34b22b4ff7bbef1b24a44a77af",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw/char_03_navigator/16-bit_pixel_art_character_portrait_front-facing_half-body_a_pretty_orange-haired_girl_navigator_shoulder-leng_7432f959/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

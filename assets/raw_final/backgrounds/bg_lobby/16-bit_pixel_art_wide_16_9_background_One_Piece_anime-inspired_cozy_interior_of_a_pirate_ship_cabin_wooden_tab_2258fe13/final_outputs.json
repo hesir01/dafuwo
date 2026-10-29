@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_50d85ef0e5424819b4b9e02db99470f5",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_final/backgrounds/bg_lobby/16-bit_pixel_art_wide_16_9_background_One_Piece_anime-inspired_cozy_interior_of_a_pirate_ship_cabin_wooden_tab_2258fe13/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

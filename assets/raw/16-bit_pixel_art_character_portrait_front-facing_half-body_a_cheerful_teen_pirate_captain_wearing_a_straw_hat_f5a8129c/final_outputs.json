@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_5bb04d77c5c444bd9851f99cd3dcfc14",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw/16-bit_pixel_art_character_portrait_front-facing_half-body_a_cheerful_teen_pirate_captain_wearing_a_straw_hat_f5a8129c/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

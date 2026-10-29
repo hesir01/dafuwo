@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_3bab721bd42a4908afe6682580848b0b",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_fx2/fx_ice/16-bit_pixel_art_sprite_sheet_of_8_sequential_animation_frames_arranged_in_one_horizontal_row_evenly_spaced_8-_e2314cb0/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

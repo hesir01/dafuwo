@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_5c677dd83ae9469abd3decda4e0daded",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_islands/isl_east_02_orange/16-bit_pixel_art_island_map_icon_One_Piece_anime-inspired_top-down_view_chibi_stylized_vibrant_saturated_color_27faaffa/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

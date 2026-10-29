@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_d39b328829484dd6aaaefc3e2f5b4072",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_fx2/fx_teleport/16-bit_pixel_art_sprite_sheet_of_8_sequential_animation_frames_arranged_in_one_horizontal_row_evenly_spaced_8-_4a0e8ee5/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

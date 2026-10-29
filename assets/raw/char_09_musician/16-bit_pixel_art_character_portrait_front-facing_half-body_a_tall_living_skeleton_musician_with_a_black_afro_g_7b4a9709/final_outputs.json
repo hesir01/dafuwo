@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_2b6143df064f47688d17611874d16605",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw/char_09_musician/16-bit_pixel_art_character_portrait_front-facing_half-body_a_tall_living_skeleton_musician_with_a_black_afro_g_7b4a9709/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

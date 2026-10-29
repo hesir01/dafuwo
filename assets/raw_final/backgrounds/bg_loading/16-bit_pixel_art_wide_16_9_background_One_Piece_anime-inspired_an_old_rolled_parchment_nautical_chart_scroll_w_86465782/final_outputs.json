@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_b97a73542e824092af2d17dbe4f57f53",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_final/backgrounds/bg_loading/16-bit_pixel_art_wide_16_9_background_One_Piece_anime-inspired_an_old_rolled_parchment_nautical_chart_scroll_w_86465782/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

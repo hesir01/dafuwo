@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_228ce01afc6344bbbc96435bf3ca9fc6",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_tokens/char_01_captain/16-bit_pixel_art_circular_board-game_token_head-only_close-up_chibi_face_medallion_of_the_cheerful_pirate_capt_b433ee7c/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

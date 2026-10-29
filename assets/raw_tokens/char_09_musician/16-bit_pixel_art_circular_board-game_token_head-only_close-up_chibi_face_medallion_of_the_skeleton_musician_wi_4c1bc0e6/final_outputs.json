@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_d65791fac5f54cb1a17028f6c92338ba",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_tokens/char_09_musician/16-bit_pixel_art_circular_board-game_token_head-only_close-up_chibi_face_medallion_of_the_skeleton_musician_wi_4c1bc0e6/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

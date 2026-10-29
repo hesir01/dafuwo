@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_08e56ebcd97b4fb28a7d86ee35c9ce54",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_tokens/char_06_doctor/16-bit_pixel_art_circular_board-game_token_head-only_close-up_chibi_face_medallion_of_the_tiny_blue-nosed_rein_e31c3660/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

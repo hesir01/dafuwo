@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_b1302e758f914bf499558932192cbae3",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_tokens/char_10_helmsman/16-bit_pixel_art_circular_board-game_token_head-only_close-up_chibi_face_medallion_of_the_whale-shark_fish-man_8a86fd9e/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

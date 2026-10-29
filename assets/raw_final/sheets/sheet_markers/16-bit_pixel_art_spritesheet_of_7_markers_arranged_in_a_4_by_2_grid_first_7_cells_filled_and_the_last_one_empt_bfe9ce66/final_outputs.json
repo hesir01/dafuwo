@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_99954292db904b41bf793fe9a7778a3b",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_final/sheets/sheet_markers/16-bit_pixel_art_spritesheet_of_7_markers_arranged_in_a_4_by_2_grid_first_7_cells_filled_and_the_last_one_empt_bfe9ce66/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

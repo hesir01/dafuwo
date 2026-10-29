@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_c6c06f082a2c4804a6b9992b54e94128",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_final/board/tile_sea/16-bit_pixel_art_tileset_One_Piece_anime-inspired_top-down_ocean_board_tiles_repeating_sea_waves_in_shades_of_13172f51/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

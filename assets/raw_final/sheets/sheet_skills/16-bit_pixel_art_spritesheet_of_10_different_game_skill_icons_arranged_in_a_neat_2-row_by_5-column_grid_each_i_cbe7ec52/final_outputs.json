@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_a35fef2ad2c34689a49f4f221f03ffc9",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw_final/sheets/sheet_skills/16-bit_pixel_art_spritesheet_of_10_different_game_skill_icons_arranged_in_a_neat_2-row_by_5-column_grid_each_i_cbe7ec52/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}

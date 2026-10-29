@@ -1,0 +1,12 @@
+const { chromium } = require('playwright-core')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+;(async () => {
+  const b = await chromium.launch({ headless: true, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
+  const p = await b.newPage({ viewport: { width: 1512, height: 760 }, deviceScaleFactor: 2 })
+  await p.goto('http://localhost:5173/index.html', { waitUntil: 'networkidle' })
+  await sleep(1800)
+  await p.evaluate(() => window.__game.scene.start('BoardScene', { autoPlay: false }))
+  await sleep(2200)
+  await p.screenshot({ path: '/tmp/board_1512.png' })
+  await b.close()
+})().catch((e) => { console.error(e); process.exit(1) })

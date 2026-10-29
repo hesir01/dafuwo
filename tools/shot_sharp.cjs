@@ -1,0 +1,21 @@
+// 全量清晰度验证截图：vite dev(5173) 下截 选人页 / 棋盘页（2x DPR）
+const { chromium } = require('playwright-core')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+;(async () => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2 })
+  const errs = []
+  page.on('pageerror', (e) => errs.push('pageerror: ' + e.message))
+  page.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()) })
+  page.on('requestfailed', (r) => errs.push('reqfail: ' + r.url()))
+  await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })
+  await sleep(2600)
+  await page.evaluate(() => window.__game.scene.start('SelectScene', { online: false }))
+  await sleep(2400)
+  await page.screenshot({ path: '.playwright-cli/sharp-select.png' })
+  await page.evaluate(() => window.__game.scene.start('BoardScene', { autoPlay: false }))
+  await sleep(2600)
+  await page.screenshot({ path: '.playwright-cli/sharp-board.png' })
+  console.log('errors:', errs.length ? errs.slice(0, 10) : 'none')
+  await browser.close()
+})().catch((e) => { console.error(e); process.exit(1) })

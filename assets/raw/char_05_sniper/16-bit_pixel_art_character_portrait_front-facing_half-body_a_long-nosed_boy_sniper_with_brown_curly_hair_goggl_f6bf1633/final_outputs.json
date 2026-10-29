@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_02da7ba717314dc690496871e3e70d95",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw/char_05_sniper/16-bit_pixel_art_character_portrait_front-facing_half-body_a_long-nosed_boy_sniper_with_brown_curly_hair_goggl_f6bf1633/result_images_0_url.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
