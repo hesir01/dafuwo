@@ -446,7 +446,7 @@ export default class BoardScene extends Phaser.Scene {
     const avY = startY + ringOuter
     this.centerAvatarBg = this.add.circle(avX, avY, avD * 0.55, 0xf2e6c8)
       .setStrokeStyle(3, 0xc9a86a, 0.9)
-    this.centerAvatar = this.add.image(avX, avY, 'token1').setDisplaySize(avD, avD)
+    this.centerAvatar = this.add.image(avX, avY, 'tokenhd1').setDisplaySize(avD, avD)
     this.centerAvatarBaseScale = this.centerAvatar.scaleX
     // 头像裁成圆形：立绘是方形切图，四角会戳出米色圆盘，回合切换的弹跳放大也会把它顶到框外
     if (this.centerAvatarMask) this.centerAvatarMask.destroy()
@@ -2276,7 +2276,7 @@ export default class BoardScene extends Phaser.Scene {
 
     // 中央画框：当前回合玩家的头像 / 名字 / 目标进度
     if (this.centerAvatar) {
-      const avatarKey = `token${p.charId}`
+      const avatarKey = `tokenhd${p.charId}`
       if (this.textures.exists(avatarKey)) this.centerAvatar.setTexture(avatarKey)
       // 回合切换时头像弹跳入场
       const avatarKeyCombo = `${avatarKey}:${s.current}:${s.turn}`

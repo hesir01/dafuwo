@@ -9,6 +9,7 @@ import os
 JOBS = [
     # (glob, 目标边长, 后缀)
     ('assets/portraits_cut/char_*_portrait.png', 256, '_256'),   # 头像 40-84px、选人卡 ~150px
+    ('assets/tokens/char_*_token.png', 256, '_256'),             # 中央头像最大 96px（2x DPR 192），64 版放大会糊
     ('assets/fruits/fruit_*.png', 96, '_96'),                    # 手牌图标 ~35px、弹窗 48px
     ('assets/haki/haki_*.png', 96, '_96'),                       # 同上
     ('assets/ui/card_back.png', 128, '_128'),                    # 手牌背 64px

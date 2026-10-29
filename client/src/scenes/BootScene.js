@@ -49,6 +49,11 @@ export default class BootScene extends Phaser.Scene {
     Object.entries(CELL_ICONS).forEach(([type, url]) => { this.load.image(`cell_${type}`, url) })
     // 棋子：按角色 ID 加载（token1..token10），对局内用 charId 取对应头像
     TOKEN_ICONS.forEach((url, i) => { this.load.image(`token${i + 1}`, url) })
+    // 中央头像专用高清版（256 LANCZOS）：64 版在中央画框被放大到 ~96px（2x DPR 192）会糊；
+    // 棋子本体在棋盘上只有 ~20-30px，继续用 64 版
+    TOKEN_ICONS.forEach((url, i) => {
+      this.load.image(`tokenhd${i + 1}`, url.replace('_token_64.png', '_token_256.png'))
+    })
     // 棋子 idle 呼吸动画：8 帧横排 sheet（charId 1..10 与 token 同序）
     const IDLE_KEYS = [
       'char_01_captain', 'char_02_swordsman', 'char_03_navigator', 'char_04_cook',
