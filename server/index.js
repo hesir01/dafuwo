@@ -8,7 +8,7 @@ import { Server } from 'socket.io'
 import dotenv from 'dotenv'
 
 import { registerGameSocket } from './sockets/gameSocket.js'
-import { sweepRooms } from './rooms.js'
+import { sweepRooms, roomsStats } from './rooms.js'
 
 dotenv.config()
 
@@ -22,6 +22,20 @@ app.use(express.json())
 // 健康检查 / hello
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'op-monopoly', time: Date.now() })
+})
+
+// 运维概况：房间/对局/在线人数 + 进程内存与运行时长
+app.get('/api/stats', (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  const mem = process.memoryUsage()
+  res.json({
+    ok: true,
+    ...roomsStats(),
+    rssMb: Math.round(mem.rss / 1048576),
+    uptimeSec: Math.round(process.uptime()),
+    node: process.version,
+    time: Date.now()
+  })
 })
 
 // 生产模式：Node 单端口直出前端（dist 由 npm run build:deploy 产出）

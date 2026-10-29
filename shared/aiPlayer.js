@@ -5,7 +5,7 @@
 
 import {
   getCurrentPlayer, roll, buy, declineBuy, buyHistory, declineHistory,
-  upgrade, endTurn, useFruit, useHaki, confirmFruitTarget,
+  upgrade, endTurn, useFruit, useHaki, useSkill, getChar, confirmFruitTarget,
   cancelTarget, decisionReroll, decisionEventCancel, decisionFlower, finalVoyage,
   decisionTrade, proposeTrade, getHistoryIds
 } from './engine.js'
@@ -31,9 +31,16 @@ export function aiStep(state, opts = {}) {
   const canControl = typeof opts.canControl === 'function' ? opts.canControl : null
   const p = getCurrentPlayer(state)
   switch (state.phase) {
-    case 'awaitRoll':
+    case 'awaitRoll': {
+      // 路飞（免租）/ 乔巴（损失减半）必须在掷骰前开技能：
+      // 租金和事件都在移动结算时发生，等回到 awaitAction 就已经晚了
+      const ch = getChar(p)
+      if ((p.charId === 1 || p.charId === 6) && ch.skillType === 'active' && p.skillUsed < ch.skillUses) {
+        useSkill(state)
+      }
       roll(state)
       return 'roll'
+    }
 
     case 'awaitReroll': {
       const first = state.pendingReroll.first

@@ -52,6 +52,7 @@ export function createRoom(hostSocket, name, maxPlayers = 4, evicted = []) {
     selectTimer: null
   }
   rooms.set(code, room)
+  console.log(`[rooms] 创建房间 ${code}（当前共 ${rooms.size} 间）`)
   return room
 }
 
@@ -299,4 +300,19 @@ export function clearRoomTimers(room) {
   clearSelectTimer(room)
   if (room.turnTimer) { clearTimeout(room.turnTimer); room.turnTimer = null }
   room.aiPending = false
+}
+
+// ---------- 可观测性 ----------
+// 供 /api/stats：房间/对局/在线概况，运维不用 SSH 也能看服务器状态
+export function roomsStats() {
+  let activeGames = 0, humansOnline = 0, humansOffline = 0, aiSeats = 0
+  for (const room of rooms.values()) {
+    if (room.started && room.state && room.state.phase !== 'ended') activeGames++
+    for (const p of room.players) {
+      if (p.isAI) aiSeats++
+      else if (p.disconnected) humansOffline++
+      else humansOnline++
+    }
+  }
+  return { rooms: rooms.size, activeGames, humansOnline, humansOffline, aiSeats }
 }
