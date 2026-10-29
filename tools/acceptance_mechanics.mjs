@@ -486,8 +486,21 @@ console.log('\n=== 9. 角色技能（PRD §2.2）===')
   const brook = g6.players[0]
   brook.cash = 10
   g6.phase = 'awaitAction'
-  const res6 = settleDebt(g6, brook, 500, g6.players[1], 'rent')
-  ok(res6.status === 'saved' && !brook.bankrupt && brook.skillUsed === 1, '§2.2', '布鲁克「黄泉复活」免除一笔租金债务（不破产）')
+  const res6 = settleDebt(g6, brook, 350, g6.players[1], 'rent')
+  ok(res6.status === 'saved' && !brook.bankrupt && brook.skillUsed === 1, '§2.2', '布鲁克「黄泉复活」免除 ≤400 的租金债务（不破产）')
+  // 免债上限（2026-10-29 平衡）：>400 免 400，剩余照常结算
+  const g6b = mk(2, [9, 1])
+  const brook6b = g6b.players[0]
+  brook6b.cash = 10
+  const res6b = settleDebt(g6b, brook6b, 500, g6b.players[1], 'rent')
+  ok(res6b.status === 'bankrupt' && brook6b.bankrupt && brook6b.skillUsed === 1, '§2.2', '免债上限：500 债务免 400 后剩余 100，无岛可卖 → 仍破产')
+  const g6c = mk(2, [9, 1])
+  const brook6c = g6c.players[0]
+  brook6c.cash = 10
+  brook6c.islandIds = [5] // 巴拉蒂 120，变卖 50% = 60，正好补足免 400 后剩余的 40+10 现金
+  g6c.islandState[5] = { ownerId: 0, level: 0 }
+  const res6c = settleDebt(g6c, brook6c, 440, g6c.players[1], 'rent')
+  ok(res6c.status === 'liquidated' && !brook6c.bankrupt, '§2.2', '免债上限：440 债务免 400 + 现金10 + 变卖60 → 恰好还清，不破产')
   // 事件罚款不免
   const g7 = mk(2, [9, 1])
   const brook7 = g7.players[0]

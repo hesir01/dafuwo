@@ -15,7 +15,10 @@ export const ECONOMY = {
   HISTORY_BUY: 200,
   HISTORY_BUY_ROBIN: 100,
   HAND_LIMIT: 5,
-  SELL_RATE: 0.5
+  SELL_RATE: 0.5,
+  // 布鲁克·黄泉复活的单笔免债上限（超出部分照常变卖/破产）
+  // 依据：tools/balance_sim.mjs 3000 局模拟胜率 1.35x 基线，加容错上限收敛（见 10 报告 2026-10-29）
+  REVIVE_WAIVE_MAX: 400
 }
 
 // 骰子
@@ -201,8 +204,8 @@ export const CHARACTERS = [
     skillName: '厨房补给', skillType: 'passive', skillUses: 0,
     skillIcon: '/skills/skill_04.png', desc: '经过起点时经费多领20%（领240）' },
   { id: 5, key: 'sniper', name: '乌索普', title: '狙击手',
-    skillName: '狙击预判', skillType: 'active', skillUses: 1,
-    skillIcon: '/skills/skill_05.png', desc: '掷骰后可重掷一次（双骰整体重掷），二选一' },
+    skillName: '狙击预判', skillType: 'active', skillUses: 2,
+    skillIcon: '/skills/skill_05.png', desc: '掷骰后可重掷（双骰整体重掷），二选一，每局限 2 次' },
   { id: 6, key: 'doctor', name: '乔巴', title: '船医',
     skillName: '应急治疗', skillType: 'active', skillUses: 1,
     skillIcon: '/skills/skill_06.png', desc: '本次受到的负面事件/罚款损失减半' },
@@ -214,7 +217,7 @@ export const CHARACTERS = [
     skillIcon: '/skills/skill_08.png', desc: '升级岛屿费用打7折' },
   { id: 9, key: 'musician', name: '布鲁克', title: '音乐家',
     skillName: '黄泉复活', skillType: 'active', skillUses: 1,
-    skillIcon: '/skills/skill_09.png', desc: '即将因租金/保释金债务破产时，免除该笔债务' },
+    skillIcon: '/skills/skill_09.png', desc: '即将因租金/保释金债务破产时，免除该笔债务（免债上限 400）' },
   { id: 10, key: 'helmsman', name: '甚平', title: '舵手',
     skillName: '精通海流', skillType: 'passive', skillUses: 0,
     skillIcon: '/skills/skill_10.png', desc: '免疫海王类、暴风雨等海上负面事件，遇袭反得30贝利' }

@@ -420,5 +420,62 @@ console.log('\n=== 广播脱敏：对手果实/霸气不可见 ===')
   assert(maskedStateFor(g3, 0) === g3, '无暗牌时返回原 state')
 }
 
+// ========== 平衡性调整（2026-10-29，依据 tools/balance_sim.mjs 3000 局模拟） ==========
+console.log('\n=== 平衡性调整：布鲁克免债上限 / 乌索普重掷 2 次 ===')
+{
+  const mkBrook = () => createGame([
+    { id: 0, name: '', charId: 9, tokenIndex: 0 },
+    { id: 1, name: '', charId: 1, tokenIndex: 1 }
+  ])
+  assert(ECONOMY.REVIVE_WAIVE_MAX === 400, '免债上限 400 来自 ECONOMY 单一数据源')
+  const g = mkBrook()
+  g.players[0].cash = 10
+  assert(settleDebt(g, g.players[0], 400, null, 'rent').status === 'saved', '布鲁克：≤400 债务全额免除')
+  g.players[0].cash = 0
+  assert(settleDebt(g, g.players[0], 100, null, 'rent').status === 'bankrupt', '布鲁克：技能次数用完后照常破产')
+  const g2 = mkBrook()
+  g2.players[0].cash = 10
+  const r2 = settleDebt(g2, g2.players[0], 600, null, 'rent')
+  assert(r2.status === 'bankrupt' && g2.players[0].skillUsed === 1, '布鲁克：600 债务免 400 后剩余照常结算（上限生效）')
+  // 乌索普：skillUses 1→2，第二次重掷后不再触发
+  assert(CHARACTER_BY_ID[5].skillUses === 2, '乌索普狙击预判 skillUses = 2')
+  const g3 = createGame([
+    { id: 0, name: '', charId: 5, tokenIndex: 0 },
+    { id: 1, name: '', charId: 1, tokenIndex: 1 }
+  ])
+  setTurn(g3, 0)
+  assert(roll(g3).status === 'awaitReroll' && getCurrentPlayer(g3).skillUsed === 0, '乌索普：第 1 次掷骰可重掷')
+  decisionReroll(g3, false)
+  assert(getCurrentPlayer(g3).skillUsed === 1, '乌索普：第 1 次重掷消耗后 skillUsed=1')
+  setTurn(g3, 0)
+  assert(roll(g3).status === 'awaitReroll', '乌索普：第 2 次掷骰仍可重掷')
+  decisionReroll(g3, false)
+  assert(getCurrentPlayer(g3).skillUsed === 2, '乌索普：第 2 次重掷后 skillUsed=2')
+  setTurn(g3, 0)
+  const r3 = roll(g3)
+  // 次数用尽后不再进入重掷决策（status 可能是 ok/jailed 等，但绝不可能是 awaitReroll）
+  assert(r3.status !== 'awaitReroll' && getCurrentPlayer(g3).skillUsed === 2, '乌索普：次数用尽后掷骰直接生效（不再询问重掷）')
+  // 手术果实双落格终局守卫：先结算者破产致终局后，后结算者不再落格（phase 不被覆盖回决策态）
+  // 换位后「使用者」先落到目标原位置结算：目标站在自己的高租岛上，使用者现金不足 → 破产终局
+  const g4 = createGame([
+    { id: 0, name: '', charId: 10, tokenIndex: 0 },
+    { id: 1, name: '', charId: 4, tokenIndex: 1 }
+  ])
+  const p0 = g4.players[0]
+  p0.cash = 10
+  g4.islandState[3] = { ownerId: 1, level: 2 } // 西罗布村 lv2 租 120，岛主 = 目标
+  const posVillage = BOARD.findIndex((c) => c.type === 'island' && c.islandId === 3)
+  const posFree = BOARD.findIndex((c) => c.type === 'island' && c.islandId != null && g4.islandState[c.islandId].ownerId === null)
+  p0.position = posFree       // 换位后目标落到这里（无主岛）——修复前这步会把 phase 覆盖回 awaitBuy
+  g4.players[1].position = posVillage
+  p0.hand.push({ uid: 'op1', kind: 'fruit', defId: 'op' })
+  setTurn(g4, 0)              // 先手随机：固定使用者行动，否则 getCurrentPlayer 不是 p0
+  g4.phase = 'awaitAction'
+  useFruit(g4, 'op1')
+  confirmFruitTarget(g4, 1)
+  assert(g4.phase === 'ended' && g4.winner && g4.winner.id === 1, '手术果实：先结算者破产 → 终局，后结算者不落格')
+  assert(g4.phase === 'ended', 'phase 保持 ended（不被覆盖为 awaitBuy，对局不卡死）')
+}
+
 console.log(`\n=== 结果：${passed} 通过, ${failed} 失败 ===`)
 process.exit(failed > 0 ? 1 : 0)

@@ -57,7 +57,8 @@ rollback() {
 }
 
 case "${1:-deploy}" in
-  deploy)   deploy "${2:-}" ;;
-  rollback) rollback ;;
+  deploy)      deploy "${2:-}" ;;
+  --no-verify) deploy "--no-verify" ;;
+  rollback)    rollback ;;
   *) echo "用法: tools/deploy.sh [--no-verify] | tools/deploy.sh rollback"; exit 1 ;;
 esac

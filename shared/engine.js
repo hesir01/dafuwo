@@ -164,14 +164,18 @@ export function settleDebt(state, debtor, amount, creditor = null, kind = 'other
     (s, isl) => s + Math.round(isl.price * ECONOMY.SELL_RATE), 0
   )
 
-  // 布鲁克·黄泉复活：变卖后仍会因租金/保释金破产，且技能可用 → 免除该笔债务
+  // 布鲁克·黄泉复活：变卖后仍会因租金/保释金破产，且技能可用 → 免除债务
+  // 平衡上限（10 报告 2026-10-29）：单笔最多免 REVIVE_WAIVE_MAX，超出部分照常变卖/破产
   const canRevive = debtor.charId === 9 &&
     debtor.skillUsed < getChar(debtor).skillUses &&
     (kind === 'rent' || kind === 'bail')
   if (canRevive && debtor.cash + liquidValue < amount) {
     debtor.skillUsed += 1
-    addLog(state, `${debtor.name} 发动「黄泉复活」，免除了这笔 ${amount} 贝利的债务！`)
-    return { status: 'saved' }
+    const waived = Math.min(amount, ECONOMY.REVIVE_WAIVE_MAX)
+    addLog(state, `${debtor.name} 发动「黄泉复活」，免除了这笔债务中的 ${waived} 贝利！`)
+    amount -= waived
+    if (amount <= 0) return { status: 'saved' }
+    // 剩余债务继续走下面的变卖 / 破产流程
   }
 
   // 钱不够：变卖名下岛屿（按原始买价 50%，等级作废）
@@ -262,6 +266,11 @@ function forceMoveSteps(state, player, steps, backward = false) {
 
 // ---------- 落格结算 ----------
 function resolveLanding(state, player) {
+  // 终局守卫：同一条结算链上的后续落格不再结算。
+  // 实测场景：手术果实换位后双方各 resolveLanding 一次，先结算者缴租破产触发
+  // checkWinner（phase='ended'），后结算者若无此守卫会把 phase 覆盖回 'awaitBuy'，
+  // 而 backToAction 因 winner 已存在拒绝推进 → 对局卡死在空购买阶段。
+  if (state.winner || state.phase === 'ended') return
   const cell = BOARD[player.position]
   state.lastEvent = { type: 'land', cellType: cell.type, position: player.position }
 

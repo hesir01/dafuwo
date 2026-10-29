@@ -42,7 +42,14 @@ for (let gi = 0; gi < GAMES; gi++) {
   let steps = 0
   while (steps < MAX_STEPS && g.phase !== 'ended') {
     steps++
-    aiStep(g, { canControl: () => true })
+    try {
+      aiStep(g, { canControl: () => true })
+    } catch (e) {
+      console.error(`CRASH game#${gi} step#${steps} phase=${g.phase} pendingIslandId=${g.pendingIslandId} pendingReroll=${JSON.stringify(g.pendingReroll)} lastDice=${JSON.stringify(g.lastDice)}`)
+      console.error('players:', g.players.map((p) => `${p.name}/c${p.charId} cash=${p.cash} pos=${p.position} doubles=${p.doubles} used=${p.skillUsed}`).join(' | '))
+      console.error('log tail:', g.log.slice(-8).map((l) => l.text).join(' // '))
+      throw e
+    }
   }
   const turns = g.turn
   turnsSum += turns
@@ -121,15 +128,14 @@ md.push('')
 md.push('- 全 AI 对局**不能完全代表真人**：AI 的交易/用卡策略比真人保守，依赖运营的技能（如弗兰奇升级折扣、娜美收租加成）会被放大，依赖时机的技能（如乌索普重掷）会被低估。结论用于发现**显著失衡**，不建议按小幅差异微调。')
 md.push('- 先手胜率若显著高于 25%，属大富翁类游戏的固有先手优势，可通过「后手首回合多领经费」类规则补偿（需另行设计，暂不动）。')
 md.push('')
-md.push('## 发现与建议（基于本次模拟数据，数值改动待拍板）')
+md.push('## 平衡性调整记录')
 md.push('')
-md.push('| 发现 | 解读 | 若要调整，改哪里 |')
-md.push('| --- | --- | --- |')
-md.push('| 布鲁克 1.35x 明显偏强 | 黄泉复活免一笔租/保释金债务，在高破产率对局（AI 局破产为主结束方式）等于多次容错 | `engine.js settleDebt`：给黄泉复活加免债上限（如 ≤400 全免、超出抵扣 400），或改为只免保释金 |')
-md.push('| 弗兰奇 1.26x 略强 | 升级 7 折是纯经济优势，AI 积极升级时被放大 | 可接受；如需收敛，`aiPlayer`/`engine upgrade` 折扣 7 折 → 8 折 |')
-md.push('| 乌索普 0.76x 偏弱 | 主动技能仅 1 次/局的重掷，无被动兜底 | `gameData.js` 乌索普 `skillUses` 1 → 2（PRD 写 1 次，改前需更新 PRD） |')
-md.push('| 先手 28.3% vs 25% | 温和先手优势，属大富翁类固有 | 可不做；如做：后手首回合多领 50 经费（`engine.js moveNormal`） |')
+md.push('| 日期 | 角色/项 | 调整 | 依据（调整前模拟数据） |')
+md.push('| --- | --- | --- | --- |')
+md.push('| 2026-10-29 | 布鲁克·黄泉复活 | 加单笔免债上限 400（`ECONOMY.REVIVE_WAIVE_MAX`，超出部分照常变卖/破产） | 胜率 1.35x 基线，AI 局破产为主要结束方式，无限容错过强 |')
+md.push('| 2026-10-29 | 乌索普·狙击预判 | 重掷次数 1 → 2 次/局（PRD §2.2 已同步） | 胜率 0.76x，主动技能收益低且无被动兜底 |')
+md.push('| 2026-10-29 | 弗兰奇 / 先手优势 | 维持现状（升级 7 折保留；先手 28.3% vs 25% 属大富翁类固有） | 1.26x 可接受 / 先手优势温和 |')
 md.push('')
-md.push('> 以上均未改动数值——AI 模拟与真人局存在系统性偏差，建议先观察真人对局再定。')
+md.push('> 调整后请重跑本脚本对比胜率分布；若布鲁克仍 >1.25x，可把上限降到 300。')
 fs.writeFileSync(new URL('../10_角色平衡性报告.md', import.meta.url), md.join('\n') + '\n')
 console.log('\n报告已写入 10_角色平衡性报告.md')
