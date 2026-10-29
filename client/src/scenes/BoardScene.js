@@ -2687,6 +2687,55 @@ export default class BoardScene extends Phaser.Scene {
   }
 
   // ---------- 结算 ----------
+  // 程序化胜利演出：聚光圈 + 金币喷泉 + 彩带。
+  // 不依赖 FX 素材（那批 8 帧位图质量不达标已关，见 fxConfig.js）——
+  // 金币/彩带纹理用 Graphics 运行时生成，粒子用 Phaser 3.60+ 发射器。
+  playVictoryFx(wSeat) {
+    if (wSeat == null || !this.tokenSprites[wSeat]) return
+    const t = this.tokenSprites[wSeat]
+    if (!this.textures.exists('vfx_coin')) {
+      const g = this.add.graphics()
+      g.fillStyle(0xf7c531, 1); g.fillCircle(12, 12, 11)
+      g.fillStyle(0xffe9a3, 1); g.fillCircle(12, 12, 8)
+      g.fillStyle(0xd9a325, 1); g.fillCircle(12, 12, 4)
+      g.generateTexture('vfx_coin', 24, 24)
+      g.clear()
+      g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 7, 14)
+      g.generateTexture('vfx_confetti', 7, 14)
+      g.destroy()
+    }
+    // 聚光：金色光圈自胜者棋子扩散两轮，棋子轻轻上浮示意「当选」
+    for (let i = 0; i < 2; i++) {
+      const ring = this.add.circle(t.x, t.y, 14).setStrokeStyle(4, 0xffd76a, 0.9).setDepth(860)
+      this.tweens.add({
+        targets: ring, radius: this.cell * 1.7, alpha: 0,
+        duration: 720, delay: i * 320, ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy()
+      })
+    }
+    const baseY = t.y
+    this.tweens.add({ targets: t, y: baseY - 14, duration: 380, yoyo: true, ease: 'Sine.easeInOut' })
+    // 金币喷泉：胜者格子左右双喷口，向上喷后受重力落下
+    for (const dx of [-0.7, 0.7]) {
+      const p = this.add.particles(t.x + dx * this.cell, t.y, 'vfx_coin', {
+        speed: { min: 180, max: 330 }, angle: { min: 253, max: 287 }, gravityY: 640,
+        lifespan: { min: 700, max: 1100 }, scale: { start: 1.1, end: 0.35 },
+        rotate: { start: 0, end: 360 }, quantity: 4, frequency: 60, duration: 900
+      }).setDepth(870)
+      this.time.delayedCall(2200, () => p.destroy())
+    }
+    // 彩带：全屏顶部五色飘落，盖过结算面板出现的前后
+    const conf = this.add.particles(0, 0, 'vfx_confetti', {
+      x: { min: 0, max: this.W }, y: -14,
+      speedY: { min: 90, max: 210 }, speedX: { min: -60, max: 60 },
+      rotate: { start: 0, end: 320 }, lifespan: 3200,
+      quantity: 2, frequency: 90, duration: 2400,
+      tint: [0xef5a48, 0xffd76a, 0x6cb2f5, 0x6bd58f, 0xc39be0],
+      alpha: { start: 1, end: 0.4 }, scale: { min: 0.7, max: 1.2 }
+    }).setDepth(1005) // 彩带飘在暗幕与面板之上，收尾庆祝感
+    this.time.delayedCall(3600, () => conf.destroy())
+  }
+
   showVictory(winner) {
     if (this.victoryShown || !winner) return
     this.victoryShown = true
@@ -2694,26 +2743,34 @@ export default class BoardScene extends Phaser.Scene {
     this.closeModal()
     this.closeCustomPanel()
     this.hideTip()
+    this.playSfx('sfx_victory', 0.9)
     // 脱敏广播下 s.players 是按座位重建的副本，winner 以 id 重新对齐，
     // 否则 indexOf(winner) 失配、胜者棋子特效找不到挂载点
     const w = s.players.find((x) => x.id === winner.id) || winner
-    // 胜利爆金币：在胜者最后所在格连播两次（一左一右错位），再盖结算面板
     const wSeat = s.players.indexOf(w)
-    if (wSeat >= 0 && this.tokenSprites[wSeat]) {
-      const t = this.tokenSprites[wSeat]
-      t.setVisible(true)
-      this.playFx('fx_coin_burst', t.x - this.cell * 0.6, t.y, this.cell * 2)
-      this.playFx('fx_coin_burst', t.x + this.cell * 0.6, t.y, this.cell * 2)
-    }
+    this.playVictoryFx(wSeat)
     this.tokenSprites.forEach((t, i) => { if (i !== wSeat) t.setVisible(false) })
 
+    // 舞台：暗幕先压下来，结算面板随后弹入（给聚光/金币留 ~0.9s 高光时刻）
     const layer = this.add.container(0, 0).setDepth(1000)
-    layer.add(this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.78).setInteractive())
+    const dim = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.78).setInteractive().setAlpha(0)
+    layer.add(dim)
+    this.tweens.add({ targets: dim, alpha: 0.78, duration: 460, ease: 'Quad.easeOut' })
+    const panelC = this.add.container(0, -40).setAlpha(0)
+    layer.add(panelC)
     const pw = Math.min(560, this.W - 64)
     const ph = Math.min(520, this.H - 64)
-    layer.add(makePanel(this, this.W / 2, this.H / 2, pw, ph, { fill: 0x1c1206, fillAlpha: 0.96 }))
-    layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 26, '🏆 航海王诞生 🏆', textStyle(TYPE.display, COLOR_TEXT.title, { fontStyle: 'bold' })).setOrigin(0.5, 0))
-    layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 70, `${w.name} 成为海贼王！`, textStyle(TYPE.title, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5, 0))
+    panelC.add(makePanel(this, this.W / 2, this.H / 2, pw, ph, { fill: 0x1c1206, fillAlpha: 0.96 }))
+    const title = this.add.text(this.W / 2, this.H / 2 - ph / 2 + 26, '🏆 航海王诞生 🏆', textStyle(TYPE.display, COLOR_TEXT.title, { fontStyle: 'bold' })).setOrigin(0.5, 0)
+    panelC.add(title)
+    panelC.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 70, `${w.name} 成为海贼王！`, textStyle(TYPE.title, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5, 0))
+    this.tweens.add({
+      targets: panelC, y: 0, alpha: 1,
+      duration: 520, delay: 1150, ease: 'Back.easeOut'
+    })
+    // 标题在面板落位后再弹一下，收住视线
+    title.setScale(0.4)
+    this.tweens.add({ targets: title, scale: 1, duration: 420, delay: 1650, ease: 'Back.easeOut' })
 
     // 排名 + 数据统计（PRD §9：资产 / 岛屿 / 事件统计）
     const ranked = [...s.players].sort((a, b) => playerAssets(s, b) - playerAssets(s, a))
@@ -2725,7 +2782,7 @@ export default class BoardScene extends Phaser.Scene {
       const cards = (pl.stats && pl.stats.cardsUsed) || 0
       return `${i + 1}. ${pl.name}　总资产 ${total} 贝利（现金 ${pl.cash}）\n　岛屿 ${isl} 座 · 历史正文 ${his}/4 · 抽事件 ${ev} 次 · 用卡 ${cards} 张${pl.bankrupt ? ' · 破产' : ''}`
     }).join('\n')
-    layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 116, body, textStyle(TYPE.body, COLOR_TEXT.body, { lineSpacing: 6, ...wrap(pw - 64) })).setOrigin(0.5, 0))
+    panelC.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 116, body, textStyle(TYPE.body, COLOR_TEXT.body, { lineSpacing: 6, ...wrap(pw - 64) })).setOrigin(0.5, 0))
 
     if (this.online) {
       // 再来一局（PRD §7）：房内任意真人可发起，服务器保留座位、清空状态、全员回选角
@@ -2757,9 +2814,8 @@ export default class BoardScene extends Phaser.Scene {
         label: '返回大厅', color: PALETTE.neutral, fontSize: TYPE.section,
         onClick: () => this.scene.start('LobbyScene')
       })
-      layer.add(again.root)
-      layer.add(back.root)
+      panelC.add(again.root)
+      panelC.add(back.root)
     }
-    this.playSfx('sfx_victory', 0.9)
   }
 }
