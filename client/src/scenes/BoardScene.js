@@ -12,7 +12,7 @@ import {
 import { aiStep } from '../../../shared/aiPlayer.js'
 import {
   PALETTE, COLOR_TEXT, TYPE, textStyle, monoStyle, wrap,
-  makePanel, makeButton, buildModal, showToast, onSceneResize, clamp, emitAck
+  makePanel, makeButton, buildModal, showToast, onSceneResize, clamp, emitAck, makeRounded
 } from '../ui/uiKit.js'
 import { playSfx as sfxPlay, ensureBgm, loadSettings } from '../ui/settings.js'
 import { FX_SPRITE_ENABLED } from '../ui/fxConfig.js'
@@ -515,8 +515,8 @@ export default class BoardScene extends Phaser.Scene {
   buildActionArea(x, y, w, o) {
     const gap = o.gap
     const bannerH = o.bannerH
-    this.actionBannerBg = this.add.rectangle(x + w / 2, y + bannerH / 2, w, bannerH, 0x241505, 0.8)
-      .setStrokeStyle(2, PALETTE.gold, 0.65)
+    this.actionBannerBg = makeRounded(this, w, bannerH, { fill: 0x241505, fillAlpha: 0.8, stroke: PALETTE.gold, strokeAlpha: 0.65, strokeW: 2, r: 12 })
+      .setPosition(x + w / 2, y + bannerH / 2)
     this.actionBannerTxt = this.add.text(x + w / 2, y + bannerH / 2, '', textStyle(o.bannerFont, '#fff3d6', {
       fontStyle: 'bold', align: 'center', ...wrap(w - 12)
     })).setOrigin(0.5)
@@ -665,8 +665,8 @@ export default class BoardScene extends Phaser.Scene {
     // ---- 底部提示 + 底板（底板最后建，插到最底层）----
     const hint = add(this.add.text(cw - pad, cur + 6, '点击空白处关闭', textStyle(12, COLOR_TEXT.muted)).setOrigin(1, 0))
     const h = hint.y + hint.height + pad - 4
-    const bg = this.add.rectangle(0, 0, cw, h, 0x1c1206, 0.96)
-      .setStrokeStyle(3, PALETTE.gold).setInteractive()
+    const bg = makeRounded(this, cw, h, { fill: 0x1c1206, fillAlpha: 0.96, stroke: PALETTE.gold, strokeW: 3, r: 14 })
+      .setInteractive({ hitArea: new Phaser.Geom.Rectangle(-cw / 2, -h / 2, cw, h), hitAreaCallback: Phaser.Geom.Rectangle.Contains })
     layer.addAt(bg, 0)
 
     // 局部坐标（左上角为原点）平移到以卡片中心为原点，缩放动画才能从中间弹出
@@ -980,8 +980,10 @@ export default class BoardScene extends Phaser.Scene {
       const cy = top + cardH * i + cardH / 2 + i * gapY
       const ch = cardH - 4
       const cx = s.x + pad + w / 2
-      const bg = this.add.rectangle(cx, cy, w, ch, 0x241505, 0.55)
-        .setStrokeStyle(2, PLAYER_COLORS[i % PLAYER_COLORS.length], 0.85)
+      const bg = makeRounded(this, w, ch, {
+        fill: 0x241505, fillAlpha: 0.55,
+        stroke: PLAYER_COLORS[i % PLAYER_COLORS.length], strokeAlpha: 0.85, strokeW: 2, r: 14
+      }).setPosition(cx, cy)
       // 高卡片：头像居中放大；矮卡片：横排紧凑
       // 头像尺寸必须受「名字 + 现金 + 资产」三行占位约束，否则高卡片上头像会顶到现金行
       //（4 人局 820 高时卡片≈160，旧算法放到 128 会压住「2000 贝利」）
@@ -1405,7 +1407,7 @@ export default class BoardScene extends Phaser.Scene {
     const card = this.playerCards && this.playerCards[i]
     if (!card) return
     this.floatText(card.bg.x, card.bg.y + 6, '💥 破产', COLOR_TEXT.danger, TYPE.title)
-    card.bg.setFillStyle(0x140d04, 0.8)
+    card.bg.setStyle({ fill: 0x140d04, fillAlpha: 0.8 })
     this.fxAtPlayer('fx_slash', i, { scale: 1.4 }) // 破产斩击（出局视觉锚点）
     this.playSfx('sfx_defeat', 0.8)
   }
@@ -2156,8 +2158,10 @@ export default class BoardScene extends Phaser.Scene {
       }
     }
     const active = !!mine2 && s.phase !== 'ended'
-    bg.setFillStyle(active ? 0x1a4a2a : 0x241505, active ? 0.9 : 0.65)
-    bg.setStrokeStyle(2, active ? 0x7cfc8a : PALETTE.gold, active ? 1 : 0.35)
+    bg.setStyle({
+      fill: active ? 0x1a4a2a : 0x241505, fillAlpha: active ? 0.9 : 0.65,
+      stroke: active ? 0x7cfc8a : PALETTE.gold, strokeAlpha: active ? 1 : 0.35
+    })
     txt.setColor(active ? '#a8ffb8' : '#d8cbb0')
     // 呼吸描边：仅轮到自己时，提示「该你操作了」
     if (active && !this._bannerTween) {
@@ -2299,8 +2303,10 @@ export default class BoardScene extends Phaser.Scene {
         // 再由头像金色光环呼吸 + 行动横幅表达——不再把边框换成金色，
         // 否则同一张卡上会同时出现「身份色」和「回合色」两套语义。
         const idColor = PLAYER_COLORS[i % PLAYER_COLORS.length]
-        c.bg.setStrokeStyle(cur ? 3 : 2, idColor, cur ? 1 : 0.65)
-        c.bg.setFillStyle(pl.bankrupt ? 0x140d04 : 0x241505, pl.bankrupt ? 0.7 : 0.55)
+        c.bg.setStyle({
+          stroke: idColor, strokeAlpha: cur ? 1 : 0.65, strokeW: cur ? 3 : 2,
+          fill: pl.bankrupt ? 0x140d04 : 0x241505, fillAlpha: pl.bankrupt ? 0.7 : 0.55
+        })
         const tags = []
         const tagIcons = []
         if (pl.inJail) { tags.push('🚨进城'); tagIcons.push('🚨') }
@@ -2384,10 +2390,11 @@ export default class BoardScene extends Phaser.Scene {
       const iconKey = cell.type === 'island' ? `isl${ISLAND_BY_ID[cell.islandId].id}` : `cell_${cell.type}`
       if (this.textures.exists(iconKey)) this.cellIcon.setTexture(iconKey).setVisible(true)
       else this.cellIcon.setVisible(false)
-      // 需要玩家决策的阶段：金色高亮面板 + 描边加亮（makePanel: list[0]=外框 list[1]=内底）
+      // 需要玩家决策的阶段：金色高亮面板 + 描边加亮（makePanel: list[0]=外框 list[1]=内底，
+      // 圆角化后两者都是 makeRounded Graphics，动态改色走 setStyle）
       const actionable = ['awaitBuy', 'awaitBuyHistory', 'awaitEventCancel', 'awaitReroll', 'awaitTarget', 'awaitTrade'].includes(s.phase)
-      this.cellPanel.list[1].setFillStyle(PALETTE.gold, actionable ? 0.22 : 0.08)
-      this.cellPanel.list[0].setStrokeStyle(3, actionable ? 0xffd966 : PALETTE.gold, actionable ? 1 : 0.5)
+      this.cellPanel.list[1].setStyle({ fill: PALETTE.gold, fillAlpha: actionable ? 0.22 : 0.08 })
+      this.cellPanel.list[0].setStyle({ stroke: actionable ? 0xffd966 : PALETTE.gold, strokeAlpha: actionable ? 1 : 0.5 })
     }
 
     // 棋盘光圈跟随当前玩家所在格
@@ -2769,7 +2776,7 @@ export default class BoardScene extends Phaser.Scene {
     const pSize = Math.min(200, ph - 310)
     const pcy = top + 96 + pSize / 2
     panelC.add(this.add.circle(this.W / 2, pcy, pSize / 2 + 18, 0xf7c531, 0.22))
-    panelC.add(this.add.rectangle(this.W / 2, pcy, pSize + 12, pSize + 12, 0x2a1a08, 0.9).setStrokeStyle(3, 0xffd76a, 0.95))
+    panelC.add(makeRounded(this, pSize + 12, pSize + 12, { fill: 0x2a1a08, fillAlpha: 0.9, stroke: 0xffd76a, strokeAlpha: 0.95, strokeW: 3, r: 18 }))
     const portraitKey = `portrait_${w.charId}`
     if (this.textures.exists(portraitKey)) {
       panelC.add(this.add.image(this.W / 2, pcy, portraitKey).setDisplaySize(pSize, pSize))

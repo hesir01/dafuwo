@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { CHARACTERS } from '../../../shared/gameData.js'
 import {
   PALETTE, COLOR_TEXT, TYPE, textStyle, monoStyle, wrap, clamp,
-  fitCover, makeButton, showToast, onSceneResize
+  fitCover, makeButton, showToast, onSceneResize, makeRounded
 } from '../ui/uiKit.js'
 
 const PICK_SECONDS = 60
@@ -148,7 +148,7 @@ export default class SelectScene extends Phaser.Scene {
 
   makeCard(c, x, y, cw, ch, compact) {
     const cont = this.add.container(x, y)
-    const bg = this.add.rectangle(0, 0, cw, ch, 0x241a0e).setStrokeStyle(2, PALETTE.gold)
+    const bg = makeRounded(this, cw, ch, { fill: 0x241a0e, stroke: PALETTE.gold, strokeW: 2, r: 14 })
     const lock = this.add.text(0, 0, '', textStyle(compact ? 12 : 12, '#ffd966', { fontStyle: 'bold' })).setOrigin(0.5).setVisible(false)
     cont.add([bg, lock])
 
@@ -235,17 +235,17 @@ export default class SelectScene extends Phaser.Scene {
       const isMe = this.myCharId === b.id
       b.cont.locked = !!by && !isMe
       if (by && !isMe) {
-        b.bg.setFillStyle(0x222222).setStrokeStyle(1, 0x555555)
+        b.bg.setStyle({ fill: 0x222222, stroke: 0x555555, strokeAlpha: 1, strokeW: 1 })
         b.img.setAlpha(0.25).setTint(0x888888)
         b.lock.setText(`🔒 ${by} 已选`).setVisible(true)
         b.lock.setPosition(0, b.cont.cardParts.bg.height / 2 - 16)
       } else if (isMe) {
-        b.bg.setFillStyle(0x1a4a2a).setStrokeStyle(2, 0x7cfc8a)
+        b.bg.setStyle({ fill: 0x1a4a2a, stroke: 0x7cfc8a, strokeW: 2 })
         b.img.setAlpha(1).clearTint()
         b.lock.setText('✓ 已选择').setVisible(true)
         b.lock.setPosition(0, b.cont.cardParts.bg.height / 2 - 16)
       } else {
-        b.bg.setFillStyle(0x241a0e).setStrokeStyle(2, PALETTE.gold)
+        b.bg.setStyle({ fill: 0x241a0e, stroke: PALETTE.gold, strokeW: 2 })
         b.img.setAlpha(1).clearTint()
         b.lock.setVisible(false)
       }

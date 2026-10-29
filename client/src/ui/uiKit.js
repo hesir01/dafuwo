@@ -73,13 +73,35 @@ export function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
 }
 
-// 居中面板：木质外框 + 深色内底（保证文字对比）
+// 圆角面板底：Graphics 直绘圆角矩形，替代「rectangle + setStrokeStyle」的直角观感。
+// 返回 Graphics 并挂 setStyle({fill,fillAlpha,stroke,strokeAlpha,strokeW,r})，
+// 动态改色的调用点（玩家卡三态、行动横幅、选角卡）从 setFillStyle/setStrokeStyle 平移过来。
+// 显式赋 width/height：布局与回归脚本会读取 bg.width（Graphics 默认宽高不可用）。
+export function makeRounded(scene, w, h, { fill = 0xffffff, fillAlpha = 1, stroke = null, strokeAlpha = 1, strokeW = 2, r = 14 } = {}) {
+  const g = scene.add.graphics()
+  const st = { fill, fillAlpha, stroke, strokeAlpha, strokeW, r }
+  const draw = () => {
+    g.clear()
+    g.fillStyle(st.fill, st.fillAlpha)
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, st.r)
+    if (st.stroke != null) {
+      g.lineStyle(st.strokeW, st.stroke, st.strokeAlpha)
+      g.strokeRoundedRect(-w / 2, -h / 2, w, h, st.r)
+    }
+  }
+  draw()
+  g.setStyle = (o = {}) => { Object.assign(st, o); draw(); return g }
+  g.width = w
+  g.height = h
+  return g
+}
+
+// 居中面板：圆角木质外框 + 深色内底（保证文字对比）
 export function makePanel(scene, cx, cy, w, h, opts = {}) {
   const c = scene.add.container(cx, cy)
-  const outer = scene.add.rectangle(0, 0, w + 8, h + 8, opts.frame ?? PALETTE.wood)
-    .setStrokeStyle(3, opts.gold ?? PALETTE.gold)
-  const inner = scene.add.rectangle(0, 0, w, h, opts.fill ?? PALETTE.woodDeep, opts.fillAlpha ?? 0.9)
-  const top = scene.add.rectangle(0, -h / 2 + 3, w - 10, 2, opts.gold ?? PALETTE.gold, 0.4)
+  const outer = makeRounded(scene, w + 8, h + 8, { fill: opts.frame ?? PALETTE.wood, r: 16 })
+  const inner = makeRounded(scene, w, h, { fill: opts.fill ?? PALETTE.woodDeep, fillAlpha: opts.fillAlpha ?? 0.9, r: 12 })
+  const top = scene.add.rectangle(0, -h / 2 + 6, w - 44, 2, opts.gold ?? PALETTE.gold, 0.4)
   c.add([outer, inner, top])
   return c
 }
@@ -136,7 +158,7 @@ export function makeButton(scene, {
   const useWood = wood && (scene.textures.exists('ui_btn_gold') || scene.textures.exists('ui_btn_wood'))
   const woodKey = scene.textures.exists('ui_btn_gold') ? 'ui_btn_gold' : 'ui_btn_wood'
   const root = scene.add.container(x, y).setDepth(depth)
-  let bg, hi
+  let bg, hi, stroke = null
   if (useWood) {
     // ui_btn_gold(297×96)：左右金角 22px、上下金边 10px，中央木纹自由拉伸；
     // 老素材 ui_btn_wood(738×297)：左右金属包角 52px、顶边 26px、底部阴影 12px
@@ -144,8 +166,10 @@ export function makeButton(scene, {
     bg = scene.add.nineslice(0, 0, woodKey, undefined, w, h, m[0], m[1], m[2], m[3])
     hi = null
   } else {
-    bg = scene.add.rectangle(0, 0, w, h, color).setStrokeStyle(2, PALETTE.ink)
-    hi = scene.add.rectangle(0, -h / 2 + 3, w - 6, 2, 0xffffff, 0.25)
+    // 圆角双层：深色描边层 + 主色内层（Graphics 圆角，观感不再方方正正）
+    stroke = makeRounded(scene, w + 4, h + 4, { fill: PALETTE.ink, r: 13 })
+    bg = makeRounded(scene, w, h, { fill: color, r: 11 })
+    hi = scene.add.rectangle(0, -h / 2 + 5, w - 28, 2, 0xffffff, 0.22)
   }
   const txtStyle = textStyle(fontSize, '#ffffff', { fontStyle: 'bold' })
   if (useWood) { txtStyle.stroke = '#2a1a08'; txtStyle.strokeThickness = 3 }
@@ -154,6 +178,7 @@ export function makeButton(scene, {
   txt.setPosition(align === 'left' ? -w / 2 + 12 : (align === 'right' ? w / 2 - 12 : 0), 0)
   const children = [bg, txt]
   if (hi) children.splice(1, 0, hi)
+  if (stroke) children.unshift(stroke)
 
   let rightTxt = null
   if (right) {
@@ -170,17 +195,18 @@ export function makeButton(scene, {
 
   const api = {
     root, bg, txt, w, h,
+    color, // 当前主色：hover 恢复用（圆角按钮的描边是独立层，不再随状态变）
     enabled: true,
     setLabel(t) { txt.setText(t); return api },
     setRight(t) { if (rightTxt) rightTxt.setText(t); return api },
     setColor(c) {
-      if (useWood) bg.setTint(c); else bg.setFillStyle(c)
+      api.color = c
+      if (useWood) bg.setTint(c); else bg.setStyle({ fill: c })
       return api
     },
     setEnabled(v) {
       api.enabled = v
       root.setAlpha(v ? 1 : 0.45)
-      if (!useWood) bg.setStrokeStyle(2, PALETTE.ink)
       if (v) hit()
       else root.disableInteractive()
       return api
@@ -198,11 +224,11 @@ export function makeButton(scene, {
   root.on('pointerover', () => {
     if (!api.enabled) return
     if (useWood) bg.setTint(0xffe9b0)
-    else bg.setStrokeStyle(2, PALETTE.gold)
+    else bg.setStyle({ fill: 0xffe9b0 })
   })
   root.on('pointerout', () => {
     if (useWood) bg.clearTint()
-    else bg.setStrokeStyle(2, PALETTE.ink)
+    else bg.setStyle({ fill: api.color })
     root.setScale(1)
   })
   // 动作在按下瞬间触发：按下时的回弹缩放和轻微手抖都不会再吃掉点击
