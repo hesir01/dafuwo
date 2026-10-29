@@ -97,6 +97,8 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('ui_btn_gold', '/ui/ui_btn_gold.png')
     this.load.image('ui_cardframe', '/ui/ui_cardframe.png')
     this.load.image('card_back', '/ui/card_back_128.png')
+    // 最终航行演出用小船（拉夫德鲁胜利绕场一周）
+    this.load.image('ship_voyage', '/items/item_ship_01_sheep.png')
     // 骰面表：原图每帧 128×128，但骰子本体只占 96×115，左右还各有一道「切线」装饰。
     // 中央骰子放大到 40px+ 后这两道线会变成两根游离竖杠，故用 dice_sheet_trim（已裁到本体）。
     this.load.spritesheet('dice_sheet', '/dice/dice_sheet_trim.png', {

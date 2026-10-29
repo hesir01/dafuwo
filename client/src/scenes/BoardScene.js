@@ -530,19 +530,25 @@ export default class BoardScene extends Phaser.Scene {
     // 主操作 2×2：第一行固定「掷骰 | 结束回合」；第二行按阶段切换两对按钮——
     // 买岛决策期显示「购买 | 放弃」，其余阶段显示「技能 | 出航」。
     // 每对按钮占同两个槽位，位次不随阶段跳动；按钮从 3 列变 2 列，宽度多 50%。
+    // 行高按使用频率分档：第一行每回合必点，加高为主行；第二行只在落岛决策
+    // 或特定条件（技能次数/集齐历史正文）才可点，缩矮为次行。增减相抵总高不变，
+    // 占位预算（idBudget / blockH 的 btnH*2）不受影响。
     const bw = (w - gap) / 2
-    const mk = (col, label, color, cb) => makeButton(this, {
-      x: x + bw / 2 + col * (bw + gap), y: y + o.btnH / 2,
-      w: bw, h: o.btnH, label, color, fontSize: o.btnFont, onClick: cb
+    const dH = clamp(Math.round(o.btnH * 0.18), 3, 6)
+    const h1 = o.btnH + dH
+    const h2 = o.btnH - dH
+    const mk = (col, rowY, rowH, label, color, cb) => makeButton(this, {
+      x: x + bw / 2 + col * (bw + gap), y: rowY + rowH / 2,
+      w: bw, h: rowH, label, color, fontSize: o.btnFont, onClick: cb
     })
-    this.btnRoll = mk(0, '掷 骰', PALETTE.good, () => this.handleRoll())
-    this.btnEnd = mk(1, '结束回合', 0x9b6a2f, () => this.handleEnd())
-    y += o.btnH + gap
-    this.btnBuy = mk(0, '购买', PALETTE.good, () => this.handleBuy())
-    this.btnDecline = mk(1, '放弃', PALETTE.neutral, () => this.handleDecline())
-    this.btnSkill = mk(0, '技能', PALETTE.purple, () => this.handleSkill())
-    this.btnVoyage = mk(1, '出航', PALETTE.danger, () => this.handleVoyage())
-    return y + o.btnH
+    const y2 = y + h1 + gap
+    this.btnRoll = mk(0, y, h1, '掷 骰', PALETTE.good, () => this.handleRoll())
+    this.btnEnd = mk(1, y, h1, '结束回合', 0x9b6a2f, () => this.handleEnd())
+    this.btnBuy = mk(0, y2, h2, '购买', PALETTE.good, () => this.handleBuy())
+    this.btnDecline = mk(1, y2, h2, '放弃', PALETTE.neutral, () => this.handleDecline())
+    this.btnSkill = mk(0, y2, h2, '技能', PALETTE.purple, () => this.handleSkill())
+    this.btnVoyage = mk(1, y2, h2, '出航', PALETTE.danger, () => this.handleVoyage())
+    return y2 + h2
   }
 
   islandTip(islandId) {
@@ -825,19 +831,24 @@ export default class BoardScene extends Phaser.Scene {
 
     // 功能工具条（右栏顶部右对齐）：岛屿 / 托管 / 规则 / ⚙ / 离船。
     // 不占中央画框：中央只留「现在要做的操作」；交易入口 = 点左栏玩家头像。
-    const tbH = 26
-    const tbW = 42
+    // 按使用频率分级：岛屿（查资产/租金/岛主）局内反复用，加宽加高突出；
+    // 托管/规则/⚙/离船一局用不了几次，缩矮成紧凑簇。五钮同一条中线对齐。
     const tbGap = 6
-    const mkTb = (i, label, color, cb) => makeButton(this, {
-      x: right - tbW / 2 - i * (tbW + tbGap), y: y + tbH / 2,
-      w: tbW, h: tbH, label, color, fontSize: TYPE.caption, onClick: cb
-    })
-    this.btnExit = mkTb(0, '离船', PALETTE.danger, () => this.openQuitConfirm())
-    this.btnSettings = mkTb(1, '⚙', 0x4a4a55, () => this.openSettings())
-    this.btnRules = mkTb(2, '规则', 0x4a4a55, () => this.openRules())
-    this.btnAuto = mkTb(3, '托管', 0x5a3a1a, () => this.toggleAuto())
-    this.btnIslands = mkTb(4, '岛屿', 0x2e6da4, () => this.openIslandPanel())
-    y += tbH + 8
+    let tbX = right
+    const mkTb = (label, w, h, color, cb) => {
+      tbX -= w / 2
+      const btn = makeButton(this, {
+        x: tbX, y: y + 15, w, h, label, color, fontSize: TYPE.caption, onClick: cb
+      })
+      tbX -= w / 2 + tbGap
+      return btn
+    }
+    this.btnExit = mkTb('离船', 42, 24, PALETTE.danger, () => this.openQuitConfirm())
+    this.btnSettings = mkTb('⚙', 34, 24, 0x4a4a55, () => this.openSettings())
+    this.btnRules = mkTb('规则', 42, 24, 0x4a4a55, () => this.openRules())
+    this.btnAuto = mkTb('托管', 42, 24, 0x5a3a1a, () => this.toggleAuto())
+    this.btnIslands = mkTb('岛屿', 64, 30, 0x2e6da4, () => this.openIslandPanel())
+    y += 38
 
     // 操作区默认在中央画框（视线中心）；只有画框太小的窗口才回落到右栏
     this.playerTxt = null   // 玩家名在中央，右栏不再重复
@@ -1540,13 +1551,14 @@ export default class BoardScene extends Phaser.Scene {
     if (this.online) {
       this.socket.emit('game:upgrade', { islandId }, (res) => {
         if (res && res.error) showToast(this, res.error)
+        else this.playUpgradeFx(islandId)
         this.closeCustomPanel()
       })
       return
     }
     const r = upgrade(this.state, islandId)
     if (r && r.error) showToast(this, r.error)
-    else this.playSfx('sfx_upgrade')
+    else this.playUpgradeFx(islandId)
     this.closeCustomPanel()
     this.refresh()
   }
@@ -1943,7 +1955,7 @@ export default class BoardScene extends Phaser.Scene {
   // fps 随「AI 快速行动」加快；特效应放在棋盘格之上、弹窗之下。
   // 总开关见 ui/fxConfig.js 的 FX_SPRITE_ENABLED（当前关闭：素材质量不达标）。
   playFx(key, x, y, size = null, opts = {}) {
-    if (!FX_SPRITE_ENABLED) return null
+    if (!FX_SPRITE_ENABLED) return this.playProcFx(key, x, y, size)
     if (!this.textures.exists(key)) return null
     const c = this.cell || 48
     const w = size || c * 1.4
@@ -1970,6 +1982,172 @@ export default class BoardScene extends Phaser.Scene {
     const x = spr ? spr.x : (card ? card.bg.x : this.boardCX)
     const y = spr ? spr.y : (card ? card.bg.y : this.boardCY)
     return this.playFx(key, x, y, this.cell * (opts.scale || 1.6), opts)
+  }
+
+  // ---------- 程序化特效（FX_SPRITE_ENABLED 关闭期间的替身） ----------
+  // 键位与 8 帧位图特效同名：slash 斩击弧光 / haki_lightning 天降闪电 / ice 冰晶绽放 /
+  // coin_burst 爆金币 / teleport 传送门漩涡。纯 Graphics + 补间，播完自毁。
+  playProcFx(key, x, y, size) {
+    const c = this.cell || 48
+    const scale = size ? size / (c * 1.4) : 1
+    const sfx = {
+      fx_slash: 'sfx_fruit_use', fx_haki_lightning: 'sfx_haki', fx_ice: 'sfx_storm',
+      fx_teleport: 'sfx_event_flip', fx_coin_burst: 'sfx_coin_burst'
+    }[key]
+    if (sfx) this.playSfx(sfx, 0.4)
+    try {
+      if (key === 'fx_slash') this.procSlash(x, y, c * scale)
+      else if (key === 'fx_haki_lightning') this.procLightning(x, y, c * scale)
+      else if (key === 'fx_ice') this.procIce(x, y, c * scale)
+      else if (key === 'fx_teleport') this.procPortal(x, y, c * scale)
+      else if (key === 'fx_coin_burst') this.procCoinBurst(x, y, c * scale)
+    } catch (e) { console.error('[procfx]', key, e) }
+    return null
+  }
+
+  procSlash(x, y, size) {
+    const g = this.add.graphics().setDepth(492)
+    const R = size * 0.55
+    let t = 0
+    const timer = this.time.addEvent({
+      delay: 30, repeat: 7,
+      callback: () => {
+        t++
+        g.clear()
+        const a0 = -2.4 + t * 0.34
+        g.lineStyle(5, 0xfff6d8, Math.max(0, 0.9 - t * 0.09))
+        g.beginPath(); g.arc(x, y, R, a0, a0 + 1.5); g.strokePath()
+        g.lineStyle(2, 0xffd76a, Math.max(0, 0.8 - t * 0.08))
+        g.beginPath(); g.arc(x, y, R * 0.82, a0 + 0.25, a0 + 1.3); g.strokePath()
+        if (t >= 8) { g.destroy(); timer.remove() }
+      }
+    })
+  }
+
+  procLightning(x, y, size) {
+    for (let b = 0; b < 3; b++) {
+      const g = this.add.graphics().setDepth(492).setAlpha(0)
+      this.time.delayedCall(b * 90, () => {
+        const topY = y - size * 1.3
+        const segs = 5
+        const pts = [[x + (Math.random() * 30 - 15), topY]]
+        for (let i = 1; i <= segs; i++) {
+          pts.push([x + (Math.random() * 44 - 22) * (i === segs ? 0.4 : 1), topY + (size * 1.5 * i) / segs])
+        }
+        g.clear()
+        g.lineStyle(4, 0xd8f2ff, 0.95)
+        g.beginPath(); g.moveTo(pts[0][0], pts[0][1])
+        pts.slice(1).forEach(([px, py]) => g.lineTo(px, py))
+        g.strokePath()
+        g.lineStyle(1.5, 0xffffff, 0.9)
+        g.beginPath(); g.moveTo(pts[0][0], pts[0][1])
+        pts.slice(1).forEach(([px, py]) => g.lineTo(px, py))
+        g.strokePath()
+        g.setAlpha(1)
+        this.tweens.add({ targets: g, alpha: 0, duration: 300, onComplete: () => g.destroy() })
+      })
+    }
+  }
+
+  procIce(x, y, size) {
+    const spikes = 6
+    const g = this.add.graphics().setDepth(492).setAlpha(0)
+    const drawIce = (k) => {
+      g.clear()
+      for (let i = 0; i < spikes; i++) {
+        const a = (Math.PI * 2 * i) / spikes + 0.4
+        const len = size * (0.35 + 0.3 * ((i % 2) + 1) / 2) * k
+        g.lineStyle(3, 0xbfeaff, 0.9)
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.strokePath()
+        g.fillStyle(0xeaf9ff, 0.5)
+        g.fillCircle(x + Math.cos(a) * len, y + Math.sin(a) * len, 3)
+      }
+      g.lineStyle(2, 0xeaf9ff, 0.7)
+      g.strokeCircle(x, y, size * 0.3 * k)
+    }
+    const pr = { k: 0 }
+    this.tweens.add({ targets: pr, k: 1.25, duration: 340, ease: 'Quad.easeOut', onUpdate: () => drawIce(pr.k) })
+    this.tweens.add({ targets: g, alpha: 1, duration: 120 })
+    this.time.delayedCall(580, () => this.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() }))
+  }
+
+  procPortal(x, y, size) {
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.circle(x, y, 6).setStrokeStyle(3, 0xc39be0, 0.85).setDepth(492)
+      this.tweens.add({
+        targets: ring, radius: size * 0.6, alpha: 0,
+        duration: 560, delay: i * 150, ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy()
+      })
+    }
+    const g = this.add.graphics().setDepth(492)
+    const dots = Array.from({ length: 10 }, (_, i) => i)
+    const pr = { t: 0 }
+    this.tweens.add({
+      targets: pr, t: 1, duration: 620, ease: 'Quad.easeOut',
+      onUpdate: () => {
+        g.clear()
+        dots.forEach((i) => {
+          const a = pr.t * 7 + (Math.PI * 2 * i) / 10
+          const rr = size * 0.6 * (1 - pr.t) + 3
+          g.fillStyle(0xc39be0, 0.9 * (1 - pr.t * 0.6))
+          g.fillCircle(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6, 2.5)
+        })
+      },
+      onComplete: () => g.destroy()
+    })
+  }
+
+  procCoinBurst(x, y, size) {
+    this.ensureCoinTex()
+    const p = this.add.particles(x, y, 'vfx_coin', {
+      speed: { min: 90, max: 220 }, angle: { min: 200, max: 340 }, gravityY: 520,
+      lifespan: { min: 420, max: 700 }, scale: { start: 0.8, end: 0.3 },
+      rotate: { start: 0, end: 300 }, quantity: 6, frequency: 40, duration: 260
+    }).setDepth(492)
+    this.time.delayedCall(900, () => p.destroy())
+  }
+
+  // 升级星星：三颗 ★ 从岛格逐颗弹出
+  playUpgradeFx(islandId) {
+    this.playSfx('sfx_upgrade', 0.8)
+    const idx = BOARD.findIndex((c) => c.type === 'island' && c.islandId === islandId)
+    if (idx < 0) return
+    const pt = this.cellPos(idx)
+    ;[0, 1, 2].forEach((k) => {
+      const star = this.add.text(pt.x - 20 + k * 20, pt.y + 6, '★',
+        textStyle(18, '#ffd76a', { fontStyle: 'bold', stroke: '#2a1a08', strokeThickness: 3 }))
+        .setOrigin(0.5).setDepth(492).setAlpha(0)
+      this.tweens.add({
+        targets: star, alpha: 1, y: pt.y - 18 - k * 8, scale: { from: 0.3, to: 1 },
+        duration: 300, delay: k * 130, ease: 'Back.easeOut',
+        onComplete: () => this.time.delayedCall(420, () =>
+          this.tweens.add({ targets: star, alpha: 0, y: star.y - 10, duration: 240, onComplete: () => star.destroy() }))
+      })
+    })
+  }
+
+  // 最终航行：拉夫德鲁获胜时小船绕棋盘外环一圈再进结算
+  playShipSail(wSeat) {
+    if (!this.textures.exists('ship_voyage')) return
+    const w = this.state.players[wSeat]
+    const ship = this.add.image(0, 0, 'ship_voyage')
+      .setDisplaySize(this.cell * 1.7, this.cell * 1.7).setOrigin(0.5).setDepth(695)
+    const cx = this.boardCX
+    const cy = this.boardCY
+    const R = this.cell * 5.95
+    const pt = w ? this.cellPos(w.position) : { x: cx + R, y: cy }
+    const a0 = Math.atan2(pt.y - cy, pt.x - cx)
+    const pr = { t: 0 }
+    this.tweens.add({
+      targets: pr, t: 1, duration: 2300, ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const a = a0 + pr.t * Math.PI * 2
+        ship.setPosition(cx + Math.cos(a) * R, cy + Math.sin(a) * R)
+        ship.setRotation(a + Math.PI / 2)
+      },
+      onComplete: () => this.tweens.add({ targets: ship, alpha: 0, duration: 300, onComplete: () => ship.destroy() })
+    })
   }
 
   playSfx(name, vol = 0.7) {
@@ -2332,7 +2510,21 @@ export default class BoardScene extends Phaser.Scene {
         this.fitOneLine(c.nameTxt, nameLine + (pl.bankrupt ? ' 💀' : ''), nameW, c.nameFs ?? TYPE.section, 12,
           [shortLine])
         // 单位「贝利」只在栏目标题写一次，卡片上只留数字，减少 4 张卡重复同一单位
-        c.cashTxt.setText(String(pl.cash))
+        // 现金滚动计数：从当前显示值滚向新值（配合金币飞行的得失反馈）
+        {
+          const target = pl.cash
+          if (c._cashTween) { c._cashTween.stop(); c._cashTween.remove(); c._cashTween = null }
+          const shown = c._shownCash == null ? target : c._shownCash
+          c._shownCash = target
+          if (shown !== target) {
+            c._cashTween = this.tweens.addCounter({
+              from: shown, to: target, duration: 480, ease: 'Cubic.easeOut',
+              onUpdate: (tw) => c.cashTxt.setText(String(Math.round(tw.getValue())))
+            })
+          } else {
+            c.cashTxt.setText(String(target))
+          }
+        }
         // 全员 0 岛 0 正文时不渲染占位（开局减负），有资产或状态才显示
         const hasAsset = pl.islandIds.length > 0 || getHistoryIds(pl).length > 0 || tags.length > 0
         // 资产行三级压缩：完整（图标+文字标签）→ 紧凑（标签只留 emoji）→ 只留岛屿/正文数
@@ -2938,6 +3130,8 @@ export default class BoardScene extends Phaser.Scene {
     const w = s.players.find((x) => x.id === winner.id) || winner
     const wSeat = s.players.indexOf(w)
     this.playVictoryFx(wSeat)
+    const voyage = s.winKind === 'laftel'
+    if (voyage) this.playShipSail(wSeat)
     this.tokenSprites.forEach((t, i) => { if (i !== wSeat) t.setVisible(false) })
 
     // 舞台：暗幕先压下来，结算面板随后弹入（给聚光/金币留 ~0.9s 高光时刻）
@@ -2974,11 +3168,11 @@ export default class BoardScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: panelC, y: 0, alpha: 1,
-      duration: 520, delay: 1150, ease: 'Back.easeOut'
+      duration: 520, delay: voyage ? 2500 : 1150, ease: 'Back.easeOut'
     })
     // 标题在面板落位后再弹一下，收住视线
     title.setScale(0.4)
-    this.tweens.add({ targets: title, scale: 1, duration: 420, delay: 1650, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: title, scale: 1, duration: 420, delay: voyage ? 3000 : 1650, ease: 'Back.easeOut' })
 
     // 排名 + 数据统计（PRD §9）：按钮弹层查看。buildModal 默认 depth 500，
     // 会被胜利层（1000）盖住，这里手动提到 1005
