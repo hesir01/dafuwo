@@ -48,11 +48,11 @@ async function run(size, browser) {
       rightPlayer: !!sc.playerTxt,
       rightRoll: !!sc.rollTxt,
       console: !!sc.centerConsole,
-      // 中央指挥台：6 个主按钮与行动横幅必须整体落在羊皮纸安全矩形内
+      // 中央指挥台：7 个主按钮（含岛屿速查行）与行动横幅必须整体落在羊皮纸安全矩形内
       consoleFit: (() => {
         if (!sc.centerConsole || !sc.centerRect) return true
         const r = sc.centerRect
-        const keys = ['btnRoll', 'btnEnd', 'btnBuy', 'btnDecline', 'btnSkill', 'btnVoyage']
+        const keys = ['btnRoll', 'btnEnd', 'btnBuy', 'btnDecline', 'btnSkill', 'btnVoyage', 'btnIslands']
         return keys.every((k) => {
           const b = sc[k]
           if (!b) return false
@@ -63,10 +63,13 @@ async function run(size, browser) {
       // 中央不再有正文牌位 / 交易按钮（牌位与左栏重复；交易走点头像）
       noPips: !sc.centerPips,
       noTradeBtn: !sc.btnTrade,
-      // 工具条在右栏顶部（岛屿/托管/规则/⚙/离船），须存在且落在右栏面板内
+      // 工具条在右栏顶部（托管/规则/⚙/离船），须存在且落在右栏面板内
+      // （岛屿速查已挪进中央操作区第三行，归 consoleFit 检查）
       toolbarFit: (() => {
         const p = sc.panel
-        return ['btnIslands', 'btnAuto', 'btnRules', 'btnSettings', 'btnExit'].every((k) => {
+        const keys = ['btnAuto', 'btnRules', 'btnSettings', 'btnExit']
+        if (!sc.centerConsole) keys.push('btnIslands') // 小窗回落：岛屿行在右栏操作区，同样须在面板内
+        return keys.every((k) => {
           const b = sc[k]
           if (!b) return false
           return b.root.x >= p.x && b.root.x <= p.x + p.w && b.root.y >= p.y && b.root.y <= p.y + p.h

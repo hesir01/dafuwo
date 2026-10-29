@@ -80,6 +80,7 @@ export default class LobbyScene extends Phaser.Scene {
     const bg = this.add.image(0, 0, 'bg_lobby').setOrigin(0, 0)
     fitCover(bg, this.W, this.H)
     this.add.rectangle(cx, this.H / 2, this.W, this.H, 0x051830, 0.35)
+    this.buildAmbience(bg)
 
     const titleSize = clamp(Math.round(this.W * 0.045), 22, 36)
     this.add.text(cx, Math.max(22, this.H * 0.05), '航海王大富翁', {
@@ -109,8 +110,57 @@ export default class LobbyScene extends Phaser.Scene {
   }
 
   rebuild() {
+    this.tweens.killAll()
     this.children.removeAll(true)
     this.build()
+  }
+
+  // 大厅氛围：船舱场景的「活物」——圆窗海景视差（波光带 + 远航小船剪影）与灯笼火光摇曳。
+  // 全部按背景图内坐标定位（fitCover 缩放映射），随窗口 rebuild 自动重建。
+  buildAmbience(bgImg) {
+    const img = bgImg.texture.getSourceImage()
+    const scale = Math.max(this.W / img.width, this.H / img.height)
+    const pt = (ix, iy) => ({
+      x: this.W / 2 + (ix - img.width / 2) * scale,
+      y: this.H / 2 + (iy - img.height / 2) * scale
+    })
+    if (!this.textures.exists('vfx_glow')) {
+      const g = this.add.graphics()
+      g.fillStyle(0xffffff, 0.30); g.fillCircle(32, 32, 30)
+      g.fillStyle(0xffffff, 0.45); g.fillCircle(32, 32, 19)
+      g.fillStyle(0xffffff, 1); g.fillCircle(32, 32, 9)
+      g.generateTexture('vfx_glow', 64, 64)
+      g.destroy()
+    }
+    // 1) 灯笼火光：加法混合暖光呼吸，两盏错相（图内左灯 / 柱灯）
+    ;[[300, 470, 1], [648, 118, 0.8]].forEach(([ix, iy, k]) => {
+      const p = pt(ix, iy)
+      const glow = this.add.image(p.x, p.y, 'vfx_glow')
+        .setDisplaySize(170 * k * scale, 170 * k * scale)
+        .setTint(0xffb04a).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.32)
+      this.tweens.add({
+        targets: glow, alpha: { from: 0.26, to: 0.5 }, scale: { from: 1, to: 1.1 },
+        duration: 850 + Math.random() * 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+    })
+    // 2) 圆窗海景（图内圆心/半径）：波光带左右缓摆 + 海平线上小船剪影横穿，圆 mask 裁剪
+    const wp = pt(1005, 232)
+    const R = 168 * scale
+    const maskShape = this.make.graphics({ x: 0, y: 0, add: false })
+    maskShape.fillStyle(0xffffff).fillCircle(wp.x, wp.y, R)
+    const mask = maskShape.createGeometryMask()
+    for (let i = 0; i < 2; i++) {
+      const wave = this.add.rectangle(wp.x, wp.y + R * (0.22 + i * 0.34), R * 2.6, 7 + i * 4, 0xffffff, 0.22 - i * 0.06)
+        .setMask(mask)
+      this.tweens.add({
+        targets: wave, x: wave.x - R * 1.2,
+        duration: 5200 + i * 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+    }
+    const ship = this.add.image(wp.x + R, wp.y + R * 0.3, 'ship_voyage')
+      .setDisplaySize(R * 0.3, R * 0.3).setTint(0x3a5a7a).setAlpha(0.85).setMask(mask)
+    this.tweens.add({ targets: ship, x: wp.x - R * 1.2, duration: 90000, repeat: -1, delay: 4000 })
+    this.tweens.add({ targets: ship, y: '+=2', duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
   }
 
   buttonWidth() {

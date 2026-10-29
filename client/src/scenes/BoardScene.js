@@ -426,8 +426,10 @@ export default class BoardScene extends Phaser.Scene {
     let ds = Math.max(16, Math.min(clamp(Math.round(inner * 0.30), 20, 44), Math.floor((colW - 7) / 2)))
     let dieH = Math.round(ds * DICE_ASPECT)
     let chipH = clamp(Math.round(ds * 0.62) + 2, 16, 30)
-    // 身份块高度上限：给横幅与两行按钮留够位置后剩下的部分（-4 是上下呼吸）
-    const idBudget = H - (this.centerConsole ? gap + bannerH + gap + btnH * 2 + gap : 0) - 4
+    // 岛屿行高度：与 buildActionArea 里第三行按钮同式（btnH*0.62 收敛到 20-26）
+    const islH = clamp(Math.round(btnH * 0.62), 20, 26)
+    // 身份块高度上限：给横幅、两行按钮与岛屿行留够位置后剩下的部分（-4 是上下呼吸）
+    const idBudget = H - (this.centerConsole ? gap + bannerH + gap + btnH * 2 + gap + islH : 0) - 4
     let groupH = 0
     for (;;) {
       groupH = nameH + 2 + skillH + 3 + dieH + 2 + chipH + 6
@@ -439,8 +441,20 @@ export default class BoardScene extends Phaser.Scene {
     const chipW = ds * 2 + 3
     const numFs = clamp(Math.round(chipH * 0.8), 12, 26)
     const idH = Math.max(blockW, groupH)
+    // 岛屿行加入后，中等窗口（1080×610 / 1280×720）内容块会越出羊皮纸：
+    // 按 岛屿行高 → 主/次行高差 → 横幅高 逐级回收（-4 与 idBudget 同一呼吸量），
+    // 挤压后的值经 opts 传给 buildActionArea，预算与实际绘制不会漂移
+    let islHx = islH
+    let dHx = clamp(Math.round(btnH * 0.18), 3, 6)
+    let bannerHx = bannerH
+    if (this.centerConsole) {
+      let over = idH + gap + bannerHx + gap + btnH * 2 + gap + islHx - (H - 4)
+      if (over > 0) { const cut = Math.min(over, islHx - 20); islHx -= cut; over -= cut }
+      if (over > 0) { const cut = Math.min(over, dHx); dHx -= cut; over -= cut }
+      if (over > 0) { const cut = Math.min(over, bannerHx - 28); bannerHx -= cut; over -= cut }
+    }
     const blockH = this.centerConsole
-      ? idH + gap + bannerH + gap + (btnH * 2 + gap)
+      ? idH + gap + bannerHx + gap + (btnH * 2 + gap) + islHx
       : idH
     const startY = top + Math.max(0, (H - blockH) / 2)
     const avX = left + pad + ringOuter
@@ -510,9 +524,9 @@ export default class BoardScene extends Phaser.Scene {
     // 回合数只在右栏顶部显示一次（中央重复写「第 N 回合」属于同屏重复信息）
   }
 
-  // 行动横幅 + 主操作 2×2（上下文切换）
+  // 行动横幅 + 主操作 2×2（上下文切换）+ 岛屿速查行
   // 中央画框与小窗回落的右栏共用同一套按钮实例名，refresh 的 setBtn 逻辑无需分支。
-  // 次要功能（岛屿/托管/规则/⚙/离船）在右栏顶部工具条（buildPanel），交易走玩家卡点头像。
+  // 低频功能（托管/规则/⚙/离船）在右栏顶部工具条（buildPanel），交易走玩家卡点头像。
   buildActionArea(x, y, w, o) {
     const gap = o.gap
     const bannerH = o.bannerH
@@ -548,7 +562,16 @@ export default class BoardScene extends Phaser.Scene {
     this.btnDecline = mk(1, y2, h2, '放弃', PALETTE.neutral, () => this.handleDecline())
     this.btnSkill = mk(0, y2, h2, '技能', PALETTE.purple, () => this.handleSkill())
     this.btnVoyage = mk(1, y2, h2, '出航', PALETTE.danger, () => this.handleVoyage())
-    return y2 + h2
+    // 岛屿速查（我的资产/租金）：局内高频查看，作为第三行常驻全宽矮条，
+    // 与会切换的操作按钮拉开层次（信息入口 ≠ 回合操作）。高度与中央预算同式。
+    const islH = clamp(Math.round(o.btnH * 0.62), 20, 26)
+    const yIsl = y2 + h2 + gap
+    this.btnIslands = makeButton(this, {
+      x: x + w / 2, y: yIsl + islH / 2, w, h: islH, label: '岛屿', color: 0x2e6da4,
+      fontSize: clamp(Math.round(o.btnFont * 0.85), 10, 14),
+      onClick: () => this.openIslandPanel()
+    })
+    return yIsl + islH
   }
 
   islandTip(islandId) {
@@ -829,16 +852,16 @@ export default class BoardScene extends Phaser.Scene {
       .setOrigin(0, 0).setVisible(false)
     y += 30
 
-    // 功能工具条（右栏顶部右对齐）：岛屿 / 托管 / 规则 / ⚙ / 离船。
-    // 不占中央画框：中央只留「现在要做的操作」；交易入口 = 点左栏玩家头像。
-    // 按使用频率分级：岛屿（查资产/租金/岛主）局内反复用，加宽加高突出；
-    // 托管/规则/⚙/离船一局用不了几次，缩矮成紧凑簇。五钮同一条中线对齐。
+    // 功能工具条（右栏顶部右对齐）：托管 / 规则 / ⚙ / 离船。
+    // 岛屿速查已挪进中央操作区第三行（buildActionArea，局内高频查看）；
+    // 这四个都是一局用不了几次的低频功能，缩矮成紧凑簇。不占中央画框：
+    // 中央只留「现在要做的操作」；交易入口 = 点左栏玩家头像。
     const tbGap = 6
     let tbX = right
     const mkTb = (label, w, h, color, cb) => {
       tbX -= w / 2
       const btn = makeButton(this, {
-        x: tbX, y: y + 15, w, h, label, color, fontSize: TYPE.caption, onClick: cb
+        x: tbX, y: y + 12, w, h, label, color, fontSize: TYPE.caption, onClick: cb
       })
       tbX -= w / 2 + tbGap
       return btn
@@ -847,8 +870,7 @@ export default class BoardScene extends Phaser.Scene {
     this.btnSettings = mkTb('⚙', 34, 24, 0x4a4a55, () => this.openSettings())
     this.btnRules = mkTb('规则', 42, 24, 0x4a4a55, () => this.openRules())
     this.btnAuto = mkTb('托管', 42, 24, 0x5a3a1a, () => this.toggleAuto())
-    this.btnIslands = mkTb('岛屿', 64, 30, 0x2e6da4, () => this.openIslandPanel())
-    y += 38
+    y += 32
 
     // 操作区默认在中央画框（视线中心）；只有画框太小的窗口才回落到右栏
     this.playerTxt = null   // 玩家名在中央，右栏不再重复

@@ -151,6 +151,7 @@ export default class BootScene extends Phaser.Scene {
     const bg = this.add.image(0, 0, 'bg_title').setOrigin(0, 0)
     fitCover(bg, this.W, this.H)
     this.add.rectangle(cx, cy, this.W, this.H, 0x000000, 0.35)
+    this.buildTitleAmbience(bg)
 
     const titleSize = clamp(Math.round(this.W * 0.06), 26, 72)
     this.add.text(cx, cy - 80, '航海王大富翁', {
@@ -183,6 +184,56 @@ export default class BootScene extends Phaser.Scene {
     this.add.text(cx, cy + 132, '2-4人联机 · 10位草帽团角色 · 双胜利路线', {
       ...textStyle(clamp(this.W * 0.014, 12, 16), '#ffffff', { align: 'center', ...wrap(this.W - 60) })
     }).setOrigin(0.5)
+  }
+
+  // 标题屏氛围（bg_menu 1536×864，图内坐标经 fitCover 映射）：
+  // 落日光晕呼吸 + 海面波光带缓摆 + 海平线远船剪影横穿。vfx_glow 与 LobbyScene 共用。
+  buildTitleAmbience(bgImg) {
+    const img = bgImg.texture.getSourceImage()
+    const scale = Math.max(this.W / img.width, this.H / img.height)
+    const pt = (ix, iy) => ({
+      x: this.W / 2 + (ix - img.width / 2) * scale,
+      y: this.H / 2 + (iy - img.height / 2) * scale
+    })
+    if (!this.textures.exists('vfx_glow')) {
+      const g = this.add.graphics()
+      g.fillStyle(0xffffff, 0.30); g.fillCircle(32, 32, 30)
+      g.fillStyle(0xffffff, 0.45); g.fillCircle(32, 32, 19)
+      g.fillStyle(0xffffff, 1); g.fillCircle(32, 32, 9)
+      g.generateTexture('vfx_glow', 64, 64)
+      g.destroy()
+    }
+    // 1) 落日光晕：太阳处暖橙呼吸，倒影竖带一条长光晕轻微起伏
+    const sun = pt(950, 334)
+    const sunGlow = this.add.image(sun.x, sun.y, 'vfx_glow')
+      .setDisplaySize(560 * scale, 560 * scale)
+      .setTint(0xffa040).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.30)
+    this.tweens.add({
+      targets: sunGlow, alpha: { from: 0.24, to: 0.38 }, scale: { from: 1, to: 1.06 },
+      duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    })
+    const refl = pt(950, 600)
+    const reflGlow = this.add.image(refl.x, refl.y, 'vfx_glow')
+      .setDisplaySize(200 * scale, 420 * scale)
+      .setTint(0xffb85c).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.16)
+    this.tweens.add({
+      targets: reflGlow, alpha: { from: 0.10, to: 0.22 }, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    })
+    // 2) 海面波光带：避开左侧船体，中/右海域三条错速缓摆
+    ;[[900, 480, 500, 0.16], [1150, 610, 560, 0.13], [850, 760, 640, 0.10]].forEach(([ix, iy, w, a], i) => {
+      const p = pt(ix, iy)
+      const band = this.add.rectangle(p.x, p.y, w * scale, 6 + i * 3, 0xffe9c0, a)
+      this.tweens.add({
+        targets: band, x: p.x - (60 + i * 40) * scale, alpha: a * 0.5,
+        duration: 3600 + i * 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+    })
+    // 3) 海平线远船剪影：180s 一班从右向左，随波轻晃
+    const horizon = pt(1470, 420)
+    const ship = this.add.image(horizon.x, horizon.y, 'ship_voyage')
+      .setDisplaySize(40 * scale, 40 * scale).setTint(0x6a4a30).setAlpha(0.8)
+    this.tweens.add({ targets: ship, x: pt(-60, 208).x, duration: 180000, repeat: -1, delay: 8000 })
+    this.tweens.add({ targets: ship, y: '+=1.5', duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
   }
 
   playSfx() {
