@@ -12,7 +12,7 @@
     "build:deploy": "vite build && python3 tools/trim_dist.py",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test": "node tests/engine.test.js && node tests/mechanics.test.js && node tests/trade_consent.test.js",
+    "test": "node tests/engine.test.js && node tests/mechanics.test.js && node tests/trade_consent.test.js && node tests/rooms.test.js",
     "test:ui": "node tools/verify_panel_layout.cjs"
   },
   "dependencies": {

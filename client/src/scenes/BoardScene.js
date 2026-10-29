@@ -144,6 +144,13 @@ export default class BoardScene extends Phaser.Scene {
       // 联机聊天 / 表情：在对应玩家卡片上冒气泡
       this.socket.off('chat:message')
       this.socket.on('chat:message', (msg) => this.showChatBubble(msg))
+
+      // 有人点了「再来一局」：房间回到未开始的选角阶段，跟随进入选角
+      // （本端可能还停在结算面板；game:restart 由任意真人触发，不一定是自己）
+      this.socket.off('room:update')
+      this.socket.on('room:update', (room) => {
+        if (room && !room.started && this.victoryShown) this.scene.start('SelectScene')
+      })
     }
     ensureBgm(this)
     onSceneResize(this, (w, h) => {
@@ -1444,6 +1451,12 @@ export default class BoardScene extends Phaser.Scene {
   handlePlayCard(card) {
     const s = this.state
     if (s.phase !== 'awaitAction' || getCurrentPlayer(s).cardsUsedThisTurn >= 1) return
+    // 见闻色（PRD §4.2）：主动使用 = 预览下一格；「取消负面事件」是抽卡时的自动询问。
+    // 直接点「使用」不再静默无效，先弹二选一确认。
+    if (card.kind === 'haki' && card.defId === 'observation') {
+      this.confirmObservationPreview(card)
+      return
+    }
     if (this.online) {
       const evt = card.kind === 'fruit' ? 'game:useFruit' : 'game:useHaki'
       // 出牌特效即时播放（当前玩家身上）：霸气闪电 / 果实用斩击，不等服务器回包
@@ -1461,6 +1474,63 @@ export default class BoardScene extends Phaser.Scene {
       if (!r.error) { this.playSfx('sfx_haki'); this.fxAtPlayer('fx_haki_lightning', seat, { scale: 1.9 }) }
     }
     this.refresh()
+  }
+
+  // 见闻色主动使用确认：预览下一格（消耗卡）或收手保留
+  confirmObservationPreview(card) {
+    this.closeCustomPanel()
+    this.customPanel = buildModal(this, {
+      title: '见闻色霸气', icon: 'haki_observation',
+      body: '主动使用：消耗这张见闻色，预览下一格情报。\n若留着它，抽到负面事件时也可用它取消。',
+      buttons: [
+        { label: '🔮 预览下一格', color: PALETTE.blue, onClick: () => { this.closeCustomPanel(); this.doPreview(card) } },
+        { label: '收手保留', color: PALETTE.neutral, onClick: () => this.closeCustomPanel() }
+      ]
+    })
+  }
+
+  doPreview(card) {
+    this.playSfx('sfx_haki')
+    if (this.online) {
+      this.socket.emit('game:useHaki', { uid: card.uid, action: 'preview' }, (res) => {
+        if (res && res.error) return showToast(this, res.error)
+        if (res && res.result && res.result.preview) this.showPreviewPanel(res.result.preview)
+      })
+      return
+    }
+    const s = this.state
+    const r = useHaki(s, card.uid, 'preview')
+    if (r && r.error) { showToast(this, r.error); this.refresh(); return }
+    if (r && r.preview) this.showPreviewPanel(r.preview)
+    this.refresh()
+  }
+
+  // 见闻色预览结果：下一格类型 / 岛屿归属与租金
+  showPreviewPanel(preview) {
+    const cell = preview.cell || BOARD[preview.position]
+    const typeNames = CELL_NAMES[cell.type] || '普通格'
+    const lines = [`位置 ${preview.position}：${typeNames}`]
+    if (cell.type === 'island' && cell.islandId != null) {
+      const isl = ISLAND_BY_ID[cell.islandId]
+      const st = this.state.islandState[cell.islandId] || {}
+      if (isl) {
+        lines.splice(0, 1, `位置 ${preview.position}：「${isl.name}」（${isl.price} 贝利）`)
+        if (st.ownerId == null) lines.push('无主岛屿：落下可购买')
+        else {
+          const owner = this.state.players.find((x) => x.id === st.ownerId)
+          const rent = isl.rent[st.level || 0]
+          lines.push(`${owner ? owner.name : '?'} 的岛屿（${'★'.repeat(st.level || 0) || '0级'}）：落下需缴租 ${rent}`)
+        }
+      }
+    } else if (cell.type === 'random_island') {
+      lines.push('随机抽一座岛触发购买 / 结算租金')
+    }
+    this.closeCustomPanel()
+    this.customPanel = buildModal(this, {
+      title: '🔮 见闻色预览', icon: 'haki_observation',
+      body: lines.join('\n'),
+      buttons: [{ label: '知道了', color: PALETTE.neutral, onClick: () => this.closeCustomPanel() }]
+    })
   }
 
   doUpgrade(islandId) {
@@ -2401,8 +2471,7 @@ export default class BoardScene extends Phaser.Scene {
         const bg = this.add.rectangle(x, y, mw, mh, 0x1b0f05, 0.96)
           .setStrokeStyle(1.5, 0xb98a52, 0.9)
         c.handC.add(bg)
-        const icon = card.kind === 'fruit' ? `fruit_${card.defId}`
-          : card.kind === 'haki' ? `haki_${card.defId}` : 'cell_history'
+        const icon = cardIcon(card)
         if (this.textures.exists(icon)) {
           const s2 = Math.min(mw, mh) * 0.86
           c.handC.add(this.add.image(x, y, icon).setDisplaySize(s2, s2))
@@ -2428,7 +2497,7 @@ export default class BoardScene extends Phaser.Scene {
         : '（当前阶段不可使用，或本回合已用过卡）'))
     this.customPanel = buildModal(this, {
       title: cardName(card),
-      icon: card.kind === 'fruit' ? `fruit_${card.defId}` : card.kind === 'haki' ? `haki_${card.defId}` : 'cell_history',
+      icon: cardIcon(card),
       body: [
         cardDesc(card),
         `持有者：${pl.name}`,
@@ -2621,11 +2690,15 @@ export default class BoardScene extends Phaser.Scene {
   showVictory(winner) {
     if (this.victoryShown || !winner) return
     this.victoryShown = true
+    const s = this.state
     this.closeModal()
     this.closeCustomPanel()
     this.hideTip()
+    // 脱敏广播下 s.players 是按座位重建的副本，winner 以 id 重新对齐，
+    // 否则 indexOf(winner) 失配、胜者棋子特效找不到挂载点
+    const w = s.players.find((x) => x.id === winner.id) || winner
     // 胜利爆金币：在胜者最后所在格连播两次（一左一右错位），再盖结算面板
-    const wSeat = this.state.players.indexOf(winner)
+    const wSeat = s.players.indexOf(w)
     if (wSeat >= 0 && this.tokenSprites[wSeat]) {
       const t = this.tokenSprites[wSeat]
       t.setVisible(true)
@@ -2640,24 +2713,38 @@ export default class BoardScene extends Phaser.Scene {
     const ph = Math.min(520, this.H - 64)
     layer.add(makePanel(this, this.W / 2, this.H / 2, pw, ph, { fill: 0x1c1206, fillAlpha: 0.96 }))
     layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 26, '🏆 航海王诞生 🏆', textStyle(TYPE.display, COLOR_TEXT.title, { fontStyle: 'bold' })).setOrigin(0.5, 0))
-    layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 70, `${winner.name} 成为海贼王！`, textStyle(TYPE.title, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5, 0))
+    layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 70, `${w.name} 成为海贼王！`, textStyle(TYPE.title, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5, 0))
 
-    const ranked = [...this.state.players].sort((a, b) => playerAssets(this.state, b) - playerAssets(this.state, a))
+    // 排名 + 数据统计（PRD §9：资产 / 岛屿 / 事件统计）
+    const ranked = [...s.players].sort((a, b) => playerAssets(s, b) - playerAssets(s, a))
     const body = ranked.map((pl, i) => {
       const isl = pl.islandIds.length
       const his = getHistoryIds(pl).length
-      const total = playerAssets(this.state, pl)
-      return `${i + 1}. ${pl.name}　总资产 ${total} 贝利（现金 ${pl.cash}）\n　岛屿 ${isl} 座 · 历史正文 ${his}/4${pl.bankrupt ? ' · 破产' : ''}`
+      const total = playerAssets(s, pl)
+      const ev = (pl.stats && pl.stats.eventsDrawn) || 0
+      const cards = (pl.stats && pl.stats.cardsUsed) || 0
+      return `${i + 1}. ${pl.name}　总资产 ${total} 贝利（现金 ${pl.cash}）\n　岛屿 ${isl} 座 · 历史正文 ${his}/4 · 抽事件 ${ev} 次 · 用卡 ${cards} 张${pl.bankrupt ? ' · 破产' : ''}`
     }).join('\n')
     layer.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 116, body, textStyle(TYPE.body, COLOR_TEXT.body, { lineSpacing: 6, ...wrap(pw - 64) })).setOrigin(0.5, 0))
 
     if (this.online) {
-      // 联机不能本地重开，只给一个「返回大厅」
+      // 再来一局（PRD §7）：房内任意真人可发起，服务器保留座位、清空状态、全员回选角
+      const again = makeButton(this, {
+        x: this.W / 2 - 100, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
+        label: '再来一局', color: PALETTE.good, fontSize: TYPE.section,
+        onClick: () => {
+          emitAck(this, this.socket, 'game:restart', {}, (res) => {
+            if (!res.ok) return showToast(this, res.error || '无法再来一局')
+            this.scene.start('SelectScene')
+          })
+        }
+      })
       const back = makeButton(this, {
-        x: this.W / 2, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
-        label: '返回大厅', color: PALETTE.good, fontSize: TYPE.section,
+        x: this.W / 2 + 100, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
+        label: '返回大厅', color: PALETTE.neutral, fontSize: TYPE.section,
         onClick: () => this.scene.start('LobbyScene')
       })
+      layer.add(again.root)
       layer.add(back.root)
     } else {
       const again = makeButton(this, {

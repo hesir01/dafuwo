@@ -4,10 +4,10 @@ import {
   createGame, roll, buy, declineBuy, endTurn, upgrade,
   getCurrentPlayer, useSkill, useFruit, useHaki,
   confirmFruitTarget, cancelTarget, decisionReroll, decisionEventCancel,
-  decisionTrade, finalVoyage, getHistoryIds, settleDebt
+  decisionTrade, finalVoyage, getHistoryIds, settleDebt, maskedStateFor, __test__
 } from '../shared/engine.js'
 import { aiStep } from '../shared/aiPlayer.js'
-import { ISLAND_BY_ID, ECONOMY, MONOPOLY_GROUPS, EVENTS, EVENT_BY_ID, CHARACTER_BY_ID } from '../shared/gameData.js'
+import { ISLAND_BY_ID, ECONOMY, MONOPOLY_GROUPS, EVENTS, EVENT_BY_ID, CHARACTER_BY_ID, BOARD } from '../shared/gameData.js'
 
 let passed = 0, failed = 0
 function assert(cond, msg) {
@@ -349,6 +349,72 @@ console.log('\n=== 玩家显示名＝角色名（唯一名字来源） ===')
   // 非法 charId：不允许出现 undefined / 空名，回落传入值
   const g2 = createGame([{ id: 0, name: '兜底名', charId: 99 }])
   assert(g2.players[0].name === '兜底名', 'charId 非法时回落传入名，UI 不会出现空名')
+}
+
+// ========== 缺口B：见闻色「预览下一格」 ==========
+console.log('\n=== 见闻色预览下一格（PRD §4.2） ===')
+{
+  const g = mkGame(2)
+  setTurn(g, 0)
+  g.players[0].position = 0
+  g.players[0].hand.push({ uid: 'obs1', kind: 'haki', defId: 'observation' })
+  const r = useHaki(g, 'obs1', 'preview')
+  assert(r.status === 'ok' && r.preview, 'action=preview 使用成功并返回 preview')
+  assert(r.preview.position === 1, '预览位置 = 当前位置 + 1（40 格环形起点）')
+  assert(r.preview.cell != null, 'preview 携带下一格数据（类型/岛 id）')
+  assert(g.players[0].hand.length === 0, '见闻色卡被消耗')
+  assert(g.players[0].cardsUsedThisTurn === 1, '占用本回合主动用卡次数')
+  assert(g.modal && g.modal.type === 'preview', 'state.modal 记录 preview（供广播）')
+  // 缺省 action 仍是「留给负面事件取消」，不消耗卡
+  const g2 = mkGame(2)
+  setTurn(g2, 0)
+  g2.players[0].hand.push({ uid: 'obs2', kind: 'haki', defId: 'observation' })
+  const r2 = useHaki(g2, 'obs2')
+  assert(!!r2.error && g2.players[0].hand.length === 1, '缺省 action 不消耗卡（保留给取消负面事件）')
+}
+
+// ========== 缺口D：事件统计 ==========
+console.log('\n=== 事件统计（PRD §9 结算界面） ===')
+{
+  const g = mkGame(2)
+  setTurn(g, 0)
+  const p0 = g.players[0]
+  // 直接落事件格：找棋盘上第一个 event 格（resolveLanding 走 __test__ 导出）
+  const idx = BOARD.findIndex((c) => c.type === 'event')
+  g.players[0].position = idx
+  g.phase = 'awaitAction'
+  __test__.resolveLanding(g, p0)
+  assert(p0.stats && p0.stats.eventsDrawn >= 1, '抽事件后 stats.eventsDrawn 累加')
+  // 用果实 → cardsUsed 累加
+  const g2 = mkGame(2)
+  setTurn(g2, 0)
+  g2.players[0].hand.push({ uid: 'q1', kind: 'fruit', defId: 'quake' })
+  useFruit(g2, 'q1')
+  assert(g2.players[0].stats && g2.players[0].stats.cardsUsed === 1, '用果实后 stats.cardsUsed 累加')
+}
+
+// ========== 缺口F：广播脱敏 ==========
+console.log('\n=== 广播脱敏：对手果实/霸气不可见 ===')
+{
+  const g = mkGame(2)
+  g.players[0].hand.push({ uid: 'a1', kind: 'fruit', defId: 'dark' }, { uid: 'a2', kind: 'haki', defId: 'armament' })
+  g.players[1].hand.push(
+    { uid: 'b1', kind: 'history', defId: 'history', historyId: 1 },
+    { uid: 'b2', kind: 'fruit', defId: 'ice' }
+  )
+  const m = maskedStateFor(g, 0) // 座位0 视角
+  const other = m.players[1]
+  assert(other.hand.length === 2, '对手手牌数量不变（历史正文 + 1 张暗牌）')
+  assert(other.hand.some((c) => c.kind === 'history' && c.historyId === 1), '历史正文保持公开（交易需要 historyId）')
+  assert(other.hand.every((c) => c.kind !== 'fruit' && c.kind !== 'haki'), '对手的果实/霸气被隐藏（不泄露 kind）')
+  assert(other.hand.every((c) => !c.defId || c.defId === 'hidden'), '对手暗牌不泄露 defId')
+  assert(m.players[0] === g.players[0], '自己的手牌保持全量')
+  // 原始 state 不被污染（服务端 AI 与结算依赖真实手牌）
+  assert(g.players[1].hand.some((c) => c.defId === 'ice'), '原始 state 未被修改')
+  // 没有可隐藏内容时原样返回（避免无谓拷贝）
+  const g3 = mkGame(2)
+  g3.players[1].hand = []
+  assert(maskedStateFor(g3, 0) === g3, '无暗牌时返回原 state')
 }
 
 console.log(`\n=== 结果：${passed} 通过, ${failed} 失败 ===`)
