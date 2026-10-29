@@ -7,7 +7,7 @@ import {
   createGame, roll, buy, declineBuy, buyHistory, declineHistory,
   upgrade, endTurn, getCurrentPlayer, useSkill, useFruit, useHaki,
   confirmFruitTarget, cancelTarget, decisionReroll, decisionEventCancel,
-  decisionTrade, decisionFlower, finalVoyage, getHistoryIds, proposeTrade
+  decisionTrade, decisionFlower, finalVoyage, getHistoryIds, proposeTrade, ownsMonopoly
 } from '../../../shared/engine.js'
 import { aiStep } from '../../../shared/aiPlayer.js'
 import {
@@ -116,6 +116,7 @@ export default class BoardScene extends Phaser.Scene {
     this.turnDeadline = 0
     this.timerKey = ''
     this.autoStepAt = 0
+    this._fbSnap = null // 状态反馈快照（现金/手牌/垄断），见 playStateFeedback
 
     this.buildUI()
     this.setupKeyboard()
@@ -2184,6 +2185,7 @@ export default class BoardScene extends Phaser.Scene {
   refresh() {
     const s = this.state
     if (this.portraitBlocked) return
+    this.playStateFeedback()
     const p = getCurrentPlayer(s)
     const char = CHARACTER_BY_ID[p.charId]
     // 联机且不是我的回合：所有「改变对局」的按钮置灰，只读观战
@@ -2697,19 +2699,199 @@ export default class BoardScene extends Phaser.Scene {
   // 程序化胜利演出：聚光圈 + 金币喷泉 + 彩带。
   // 不依赖 FX 素材（那批 8 帧位图质量不达标已关，见 fxConfig.js）——
   // 金币/彩带纹理用 Graphics 运行时生成，粒子用 Phaser 3.60+ 发射器。
+  // 金币纹理：胜利喷泉与经济飞币共用，首次调用时生成
+  ensureCoinTex() {
+    if (this.textures.exists('vfx_coin')) return
+    const g = this.add.graphics()
+    g.fillStyle(0xf7c531, 1); g.fillCircle(12, 12, 11)
+    g.fillStyle(0xffe9a3, 1); g.fillCircle(12, 12, 8)
+    g.fillStyle(0xd9a325, 1); g.fillCircle(12, 12, 4)
+    g.generateTexture('vfx_coin', 24, 24)
+    g.destroy()
+  }
+
+  // ===== 状态反馈调度（refresh 入口调用）=====
+  // 对比上次 refresh 时的快照，把「钱动了 / 摸牌了 / 垄断成了」翻译成动画：
+  //  1) 现金 diff 配对成转账 → 金币沿弧线从付款方卡片飞到收款方（无接收的支出飞向棋盘中心，
+  //     无来源的收入从行动者所在格飞入）
+  //  2) 当前行动者新增非暗牌 → 卡背弹出发牌翻转亮出图标再飞入手牌（联机对手手牌已脱敏，自动跳过）
+  //  3) 新达成垄断组 → 该组全部岛格金圈三连脉冲 + 中央横幅
+  playStateFeedback() {
+    const s = this.state
+    if (!s || !s.players || this.portraitBlocked) return
+    const snapOf = () => ({
+      cash: s.players.map((p) => p.cash),
+      hands: s.players.map((p) => p.hand.map((c) => `${c.uid}|${c.kind}|${c.defId}`)),
+      monos: s.players.flatMap((p, i) =>
+        MONOPOLY_GROUPS.filter((g) => ownsMonopoly(s, p, g.id)).map((g) => `${i}:${g.id}`))
+    })
+    const snap = snapOf()
+    const prev = this._fbSnap
+    this._fbSnap = snap
+    if (!prev) return
+
+    const cardPt = (i) => (this.playerCards && this.playerCards[i])
+      ? { x: this.playerCards[i].bg.x, y: this.playerCards[i].bg.y }
+      : { x: this.boardCX, y: this.boardCY }
+    const cur = s.players[s.current]
+
+    // 1) 经济流动
+    try {
+      const payers = []
+      const gainers = []
+      s.players.forEach((p, i) => {
+        const d = p.cash - prev.cash[i]
+        if (d < 0) payers.push({ i, amt: -d })
+        else if (d > 0) gainers.push({ i, amt: d })
+      })
+      const flights = []
+      for (const g of gainers) {
+        let need = g.amt
+        for (const p of payers) {
+          if (need <= 0 || p.amt <= 0) continue
+          const take = Math.min(need, p.amt)
+          flights.push([p.i, g.i, take])
+          p.amt -= take
+          need -= take
+        }
+        if (need > 0) flights.push([null, g.i, need])
+      }
+      for (const p of payers) {
+        if (p.amt > 0) flights.push([p.i, null, p.amt])
+      }
+      flights.forEach(([from, to, amt], k) => {
+        const fromPt = from == null ? this.cellPos(cur.position) : cardPt(from)
+        const toPt = to == null ? { x: this.boardCX, y: this.boardCY } : cardPt(to)
+        const coins = Math.max(1, Math.min(6, Math.round(amt / 100)))
+        this.time.delayedCall(k * 120, () => this.playCoinFlight(fromPt, toPt, coins))
+      })
+    } catch (e) { console.error('[feedback] econ', e) }
+
+    // 2) 摸牌翻面（仅当前行动者、非暗牌）
+    try {
+      const curHand = snap.hands[s.current] || []
+      const prevHand = prev.hands[s.current] || []
+      const added = curHand.filter((k) => !prevHand.includes(k) && !k.includes('|hidden'))
+      if (added.length > 0) {
+        const newest = s.players[s.current].hand[s.players[s.current].hand.length - added.length]
+        if (newest && newest.kind !== 'hidden') {
+          this.playCardReveal(this.cellPos(cur.position), newest)
+        }
+      }
+    } catch (e) { console.error('[feedback] reveal', e) }
+
+    // 3) 垄断达成
+    try {
+      const prevMonos = new Set(prev.monos)
+      snap.monos.forEach((key) => {
+        if (prevMonos.has(key)) return
+        const [pi, gid] = key.split(':')
+        const group = MONOPOLY_GROUPS.find((g) => g.id === gid)
+        if (group) this.time.delayedCall(150, () => this.playMonopolyCeremony(Number(pi), group))
+      })
+    } catch (e) { console.error('[feedback] monopoly', e) }
+  }
+
+  // 金币沿弧线从 from 飞到 to（二次贝塞尔），落袋即消散
+  playCoinFlight(from, to, coins = 3) {
+    this.ensureCoinTex()
+    this.playSfx('sfx_coin_pay', 0.45)
+    for (let k = 0; k < coins; k++) {
+      const c = this.add.image(from.x, from.y, 'vfx_coin').setDepth(700).setScale(0.85)
+      const cx = (from.x + to.x) / 2
+      const cy = Math.min(from.y, to.y) - 90 - (k % 3) * 18
+      this.tweens.addCounter({
+        from: 0, to: 1, duration: 620, delay: k * 70, ease: 'Sine.easeInOut',
+        onUpdate: (tw) => {
+          const t = tw.getValue()
+          const u = 1 - t
+          c.x = u * u * from.x + 2 * u * t * cx + t * t * to.x
+          c.y = u * u * from.y + 2 * u * t * cy + t * t * to.y
+        },
+        onComplete: () => {
+          this.tweens.add({ targets: c, alpha: 0, scale: 0.4, duration: 140, onComplete: () => c.destroy() })
+        }
+      })
+    }
+  }
+
+  // 发牌翻转：卡背弹出 → 翻面亮出图标与名字 → 停顿后飞向行动者手牌区
+  playCardReveal(at, card) {
+    this.playSfx('sfx_card_draw', 0.7)
+    const S = Math.max(46, this.cell * 1.6)
+    const iconKey = card.kind === 'fruit' ? `fruit_${card.defId}`
+      : card.kind === 'haki' ? `haki_${card.defId}` : 'cell_history'
+    const back = this.add.image(at.x, at.y - this.cell * 0.2, 'card_back')
+      .setDisplaySize(S, S).setDepth(872).setScale(0)
+    const label = this.add.text(at.x, at.y + S * 0.72, cardName(card),
+      textStyle(TYPE.bodySmall, '#ffe9a8', { fontStyle: 'bold', stroke: '#2a1a08', strokeThickness: 3 }))
+      .setOrigin(0.5).setDepth(872).setAlpha(0)
+    this.tweens.add({
+      targets: back, scale: 1, duration: 220, ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: back, scaleX: 0, duration: 130, ease: 'Quad.easeIn',
+          onComplete: () => {
+            if (this.textures.exists(iconKey)) back.setTexture(iconKey)
+            back.setDisplaySize(S, S)
+            this.tweens.add({ targets: back, scaleX: 1, duration: 150, ease: 'Quad.easeOut' })
+            this.tweens.add({ targets: label, alpha: 1, duration: 200 })
+            this.time.delayedCall(750, () => {
+              const dest = s2pt(this)
+              this.tweens.add({
+                targets: [back, label], x: dest.x, y: dest.y, scale: back.scaleY * 0.35, alpha: 0.25,
+                duration: 320, ease: 'Quad.easeIn',
+                onComplete: () => { back.destroy(); label.destroy() }
+              })
+            })
+          }
+        })
+      }
+    })
+    // 局部工具：飞向当前行动者的手牌卡
+    function s2pt(sc) {
+      const i = sc.state.current
+      const card = sc.playerCards && sc.playerCards[i]
+      return card ? { x: card.bg.x, y: card.bg.y } : { x: sc.boardCX, y: sc.boardCY }
+    }
+  }
+
+  // 垄断达成仪式：该组岛格金圈三连脉冲 + 中央横幅
+  playMonopolyCeremony(playerIdx, group) {
+    this.playSfx('sfx_upgrade', 0.9)
+    group.islandIds.forEach((id, k) => {
+      const idx = BOARD.findIndex((c) => c.type === 'island' && c.islandId === id)
+      if (idx < 0) return
+      const pt = this.cellPos(idx)
+      for (let wv = 0; wv < 3; wv++) {
+        const ring = this.add.circle(pt.x, pt.y, 10).setStrokeStyle(3, 0xffd76a, 0.85).setDepth(690)
+        this.tweens.add({
+          targets: ring, radius: this.cell * 0.95, alpha: 0,
+          duration: 520, delay: k * 90 + wv * 260, ease: 'Cubic.easeOut',
+          onComplete: () => ring.destroy()
+        })
+      }
+    })
+    const cy = this.boardCY - this.cell * 2.2
+    const txt = this.add.text(this.boardCX, cy, `⚓ ${this.state.players[playerIdx].name} 完成垄断「${group.name}」！该组租金 ×1.5`,
+      textStyle(17, '#ffd76a', { fontStyle: 'bold', stroke: '#2a1a08', strokeThickness: 4 })).setOrigin(0.5).setDepth(861).setAlpha(0)
+    const bg = makeRounded(this, txt.width + 48, 54, { fill: 0x2a1a08, fillAlpha: 0.95, stroke: 0xffd76a, strokeW: 2, r: 14 })
+      .setPosition(this.boardCX, cy).setDepth(860).setAlpha(0)
+    this.tweens.add({ targets: [bg, txt], alpha: 1, scale: { from: 0.7, to: 1 }, duration: 320, ease: 'Back.easeOut' })
+    this.time.delayedCall(1900, () => {
+      this.tweens.add({ targets: [bg, txt], alpha: 0, y: cy - 26, duration: 320, onComplete: () => { bg.destroy(); txt.destroy() } })
+    })
+  }
+
   playVictoryFx(wSeat) {
     if (wSeat == null || !this.tokenSprites[wSeat]) return
     const t = this.tokenSprites[wSeat]
-    if (!this.textures.exists('vfx_coin')) {
-      const g = this.add.graphics()
-      g.fillStyle(0xf7c531, 1); g.fillCircle(12, 12, 11)
-      g.fillStyle(0xffe9a3, 1); g.fillCircle(12, 12, 8)
-      g.fillStyle(0xd9a325, 1); g.fillCircle(12, 12, 4)
-      g.generateTexture('vfx_coin', 24, 24)
-      g.clear()
-      g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 7, 14)
-      g.generateTexture('vfx_confetti', 7, 14)
-      g.destroy()
+    this.ensureCoinTex()
+    if (!this.textures.exists('vfx_confetti')) {
+      const g2 = this.add.graphics()
+      g2.fillStyle(0xffffff, 1); g2.fillRect(0, 0, 7, 14)
+      g2.generateTexture('vfx_confetti', 7, 14)
+      g2.destroy()
     }
     // 聚光：金色光圈自胜者棋子扩散两轮，棋子轻轻上浮示意「当选」
     for (let i = 0; i < 2; i++) {
