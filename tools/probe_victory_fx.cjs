@@ -36,11 +36,35 @@ const URL = process.env.URL || 'http://localhost:5173/index.html'
     await sleep(name === 'v1_spotlight' ? 450 : ms - (name === 'v2_dim' ? 450 : name === 'v3_panel_in' ? 1050 : 1700))
     await page.screenshot({ path: `/tmp/${name}.png` })
   }
+  // 点「📊 数据详情」验证弹层在胜利层之上且数据完整（模拟按钮点击）
+  await page.evaluate(() => {
+    const sc = window.__game.scene.getScene('BoardScene')
+    // 与 showVictory 中 showStats 相同的构建：搜按钮文本命中后对按钮 Container 模拟按下
+    // （makeButton 的 onClick 绑在 root 上，emit 内部 Text 不会触发）
+    const hit = (c) => c.type === 'Container' && c.list && c.list.some((t) => t.type === 'Text' && /数据详情/.test(t.text || ''))
+    const walk = (root) => {
+      for (const c of root || []) {
+        if (hit(c)) { c.emit('pointerdown', { x: 0, y: 0 }); return true }
+        if (walk(c.list)) return true
+      }
+      return false
+    }
+    walk(sc.children.list)
+  })
+  await sleep(300)
+  await page.screenshot({ path: '/tmp/v5_stats.png' })
   const state = await page.evaluate(() => {
     const sc = window.__game.scene.getScene('BoardScene')
-    return { victoryShown: sc.victoryShown, tweens: sc.tweens.getTweens().length }
+    const modalTexts = sc.customPanel ? (function walk(c, out) { for (const k of c.list || []) { if (k.type === 'Text') out.push(k.text); else walk(k, out) } return out })(sc.customPanel.root, []) : []
+    return {
+      victoryShown: sc.victoryShown,
+      statsOpen: !!sc.customPanel,
+      statsDepth: sc.customPanel && sc.customPanel.root ? sc.customPanel.root.depth : null,
+      hasRank1: modalTexts.some((t) => /1\. 路飞/.test(t)),
+      hasEvents: modalTexts.some((t) => /抽事件 4 次/.test(t))
+    }
   })
   console.log('state:', JSON.stringify(state), 'JS 错误:', errors.length ? errors.join(' || ') : '无')
   await browser.close()
-  process.exit(errors.length ? 1 : 0)
+  process.exit(errors.length || !state.statsOpen || !state.hasRank1 ? 1 : 0)
 })()

@@ -2759,11 +2759,30 @@ export default class BoardScene extends Phaser.Scene {
     const panelC = this.add.container(0, -40).setAlpha(0)
     layer.add(panelC)
     const pw = Math.min(560, this.W - 64)
-    const ph = Math.min(520, this.H - 64)
+    const ph = Math.min(500, this.H - 64)
+    const top = this.H / 2 - ph / 2
     panelC.add(makePanel(this, this.W / 2, this.H / 2, pw, ph, { fill: 0x1c1206, fillAlpha: 0.96 }))
-    const title = this.add.text(this.W / 2, this.H / 2 - ph / 2 + 26, '🏆 航海王诞生 🏆', textStyle(TYPE.display, COLOR_TEXT.title, { fontStyle: 'bold' })).setOrigin(0.5, 0)
+    const title = this.add.text(this.W / 2, top + 22, '🏆 航海王诞生 🏆', textStyle(TYPE.display, COLOR_TEXT.title, { fontStyle: 'bold' })).setOrigin(0.5, 0)
     panelC.add(title)
-    panelC.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 70, `${w.name} 成为海贼王！`, textStyle(TYPE.title, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5, 0))
+
+    // 胜者立绘放大展示：金色光晕 + 金边框 + 大图（portrait_N 与所选角色对应）
+    const pSize = Math.min(200, ph - 310)
+    const pcy = top + 96 + pSize / 2
+    panelC.add(this.add.circle(this.W / 2, pcy, pSize / 2 + 18, 0xf7c531, 0.22))
+    panelC.add(this.add.rectangle(this.W / 2, pcy, pSize + 12, pSize + 12, 0x2a1a08, 0.9).setStrokeStyle(3, 0xffd76a, 0.95))
+    const portraitKey = `portrait_${w.charId}`
+    if (this.textures.exists(portraitKey)) {
+      panelC.add(this.add.image(this.W / 2, pcy, portraitKey).setDisplaySize(pSize, pSize))
+    }
+
+    // 名字 + 胜者一行摘要；完整四人数据收进「数据详情」弹层，不再铺满面板
+    const nameY = top + 110 + pSize
+    panelC.add(this.add.text(this.W / 2, nameY, `${w.name} 成为海贼王！`, textStyle(TYPE.title, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5, 0))
+    panelC.add(this.add.text(this.W / 2, nameY + 34,
+      `总资产 ${playerAssets(s, w)} 贝利 · 岛屿 ${w.islandIds.length} 座 · 历史正文 ${getHistoryIds(w).length}/4`,
+      textStyle(TYPE.bodySmall, '#e8d8b0')
+    ).setOrigin(0.5, 0))
+
     this.tweens.add({
       targets: panelC, y: 0, alpha: 1,
       duration: 520, delay: 1150, ease: 'Back.easeOut'
@@ -2772,9 +2791,10 @@ export default class BoardScene extends Phaser.Scene {
     title.setScale(0.4)
     this.tweens.add({ targets: title, scale: 1, duration: 420, delay: 1650, ease: 'Back.easeOut' })
 
-    // 排名 + 数据统计（PRD §9：资产 / 岛屿 / 事件统计）
+    // 排名 + 数据统计（PRD §9）：按钮弹层查看。buildModal 默认 depth 500，
+    // 会被胜利层（1000）盖住，这里手动提到 1005
     const ranked = [...s.players].sort((a, b) => playerAssets(s, b) - playerAssets(s, a))
-    const body = ranked.map((pl, i) => {
+    const statsBody = ranked.map((pl, i) => {
       const isl = pl.islandIds.length
       const his = getHistoryIds(pl).length
       const total = playerAssets(s, pl)
@@ -2782,40 +2802,45 @@ export default class BoardScene extends Phaser.Scene {
       const cards = (pl.stats && pl.stats.cardsUsed) || 0
       return `${i + 1}. ${pl.name}　总资产 ${total} 贝利（现金 ${pl.cash}）\n　岛屿 ${isl} 座 · 历史正文 ${his}/4 · 抽事件 ${ev} 次 · 用卡 ${cards} 张${pl.bankrupt ? ' · 破产' : ''}`
     }).join('\n')
-    panelC.add(this.add.text(this.W / 2, this.H / 2 - ph / 2 + 116, body, textStyle(TYPE.body, COLOR_TEXT.body, { lineSpacing: 6, ...wrap(pw - 64) })).setOrigin(0.5, 0))
-
-    if (this.online) {
-      // 再来一局（PRD §7）：房内任意真人可发起，服务器保留座位、清空状态、全员回选角
-      const again = makeButton(this, {
-        x: this.W / 2 - 100, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
-        label: '再来一局', color: PALETTE.good, fontSize: TYPE.section,
-        onClick: () => {
-          emitAck(this, this.socket, 'game:restart', {}, (res) => {
-            if (!res.ok) return showToast(this, res.error || '无法再来一局')
-            this.scene.start('SelectScene')
-          })
-        }
+    const showStats = () => {
+      this.closeCustomPanel()
+      this.customPanel = buildModal(this, {
+        title: '📊 结算数据', width: 540,
+        body: statsBody,
+        buttons: [{ label: '关闭', color: PALETTE.neutral, onClick: () => this.closeCustomPanel() }]
       })
-      const back = makeButton(this, {
-        x: this.W / 2 + 100, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
-        label: '返回大厅', color: PALETTE.neutral, fontSize: TYPE.section,
-        onClick: () => this.scene.start('LobbyScene')
-      })
-      layer.add(again.root)
-      layer.add(back.root)
-    } else {
-      const again = makeButton(this, {
-        x: this.W / 2 - 100, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
-        label: '再来一局', color: PALETTE.good, fontSize: TYPE.section,
-        onClick: () => this.scene.start('BoardScene', { autoPlay: false })
-      })
-      const back = makeButton(this, {
-        x: this.W / 2 + 100, y: this.H / 2 + ph / 2 - 42, w: 184, h: 48,
-        label: '返回大厅', color: PALETTE.neutral, fontSize: TYPE.section,
-        onClick: () => this.scene.start('LobbyScene')
-      })
-      panelC.add(again.root)
-      panelC.add(back.root)
+      if (this.customPanel && this.customPanel.root) this.customPanel.root.setDepth(1005)
     }
+
+    // 按钮三连：数据详情（左）/ 再来一局（中，C 位）/ 返回大厅（右）
+    const startAgain = () => {
+      if (this.online) {
+        // 再来一局（PRD §7）：房内任意真人可发起，服务器保留座位、清空状态、全员回选角
+        emitAck(this, this.socket, 'game:restart', {}, (res) => {
+          if (!res.ok) return showToast(this, res.error || '无法再来一局')
+          this.scene.start('SelectScene')
+        })
+      } else {
+        this.scene.start('BoardScene', { autoPlay: false })
+      }
+    }
+    const bw = Math.min(170, Math.floor((pw - 48) / 3) - 6)
+    const btnY = this.H / 2 + ph / 2 - 42
+    const btnStats = makeButton(this, {
+      x: this.W / 2 - bw - 8, y: btnY, w: bw, h: 48,
+      label: '📊 数据详情', color: PALETTE.blue, fontSize: TYPE.body, onClick: showStats
+    })
+    const btnAgain = makeButton(this, {
+      x: this.W / 2, y: btnY, w: bw, h: 48,
+      label: '⚔️ 再来一局', color: PALETTE.good, fontSize: TYPE.body, onClick: startAgain
+    })
+    const btnBack = makeButton(this, {
+      x: this.W / 2 + bw + 8, y: btnY, w: bw, h: 48,
+      label: '返回大厅', color: PALETTE.neutral, fontSize: TYPE.body,
+      onClick: () => this.scene.start('LobbyScene')
+    })
+    panelC.add(btnStats.root)
+    panelC.add(btnAgain.root)
+    panelC.add(btnBack.root)
   }
 }
