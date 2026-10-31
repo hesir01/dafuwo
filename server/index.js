@@ -10,13 +10,19 @@ import dotenv from 'dotenv'
 import { registerGameSocket } from './sockets/gameSocket.js'
 import { sweepRooms, roomsStats } from './rooms.js'
 
-dotenv.config()
+dotenv.config({ override: true })
 
 const PORT = process.env.PORT || 3000
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'
+// CLIENT_URL 支持逗号分隔的多个来源（IP 与域名同时可访问）：
+//   生产：CLIENT_URL=http://43.128.149.78:8010,https://boluodafuwo.duckdns.org
+//   本地开发单值也兼容：http://localhost:5173
+const CLIENT_URLS = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
 
 const app = express()
-app.use(cors({ origin: CLIENT_URL }))
+app.use(cors({ origin: CLIENT_URLS }))
 app.use(express.json())
 
 // 健康检查 / hello
@@ -90,7 +96,7 @@ if (fs.existsSync(path.join(distDir, 'index.html'))) {
 
 const server = http.createServer(app)
 const io = new Server(server, {
-  cors: { origin: CLIENT_URL }
+  cors: { origin: CLIENT_URLS }
 })
 
 // 注册 socket 事件

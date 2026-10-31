@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "job_id": "job_2e6b1a0bd62d47a28f33530ac85d48e5",
+  "outputs": [
+    {
+      "type": "media",
+      "path": "assets/raw/char_04_cook/fix_legs/Repair_the_legs_of_this_16-bit_pixel-art_character_The_raised_front_leg_dissolves_into_a_dark_blur_below_the_k_a73090cb/remove_bg.png",
+      "mime_type": "image/png"
+    }
+  ]
+}
